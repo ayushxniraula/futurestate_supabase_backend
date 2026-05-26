@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EstateAdmin — Property Management Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="login-screen">
+      <div class="login-bg">
+        <div class="login-blob b1"></div>
+        <div class="login-blob b2"></div>
+        <div class="login-blob b3"></div>
+      </div>
+      <div class="login-card">
+        <div class="login-logo">
+          <span class="logo-icon">⬡</span>
+          <span class="logo-text">EstateAdmin</span>
+        </div>
+        <h2>Welcome back</h2>
+        <p class="login-sub">Sign in to manage your property listings</p>
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="loginUser" placeholder="admin" />
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPass" placeholder="••••••••" />
+        </div>
+        <div id="loginError" class="login-error hidden">
+          Invalid credentials. Try admin / admin@123
+        </div>
+        <button class="btn-primary login-btn" onclick="doLogin()">
+          Sign In
+        </button>
+      </div>
+    </div>
+
+    <!-- MAIN PORTAL -->
+    <div id="portal" class="portal hidden">
+      <!-- SIDEBAR -->
+      <aside class="sidebar">
+        <div class="sidebar-logo">
+          <span class="logo-icon">⬡</span>
+          <span>EstateAdmin</span>
+        </div>
+        <nav class="sidebar-nav">
+          <a href="#" class="nav-item active" onclick="showPage('listings')">
+            <span class="nav-icon">▦</span> Properties
+          </a>
+          <a href="#" class="nav-item" onclick="showPage('add')">
+            <span class="nav-icon">＋</span> Add Property
+          </a>
+        </nav>
+        <div class="sidebar-footer">
+          <div class="admin-badge">
+            <div class="admin-avatar">A</div>
+            <div>
+              <div class="admin-name">Admin</div>
+              <div class="admin-role">Super Admin</div>
+            </div>
+          </div>
+          <button class="logout-btn" onclick="doLogout()">↩ Logout</button>
+        </div>
+      </aside>
+
+      <!-- MAIN CONTENT -->
+      <main class="main-content">
+        <!-- LISTINGS PAGE -->
+        <div id="page-listings" class="page">
+          <div class="page-header">
+            <div>
+              <h1>Property Listings</h1>
+              <p id="listingCount">Loading...</p>
+            </div>
+            <button class="btn-primary" onclick="showPage('add')">
+              + Add Property
+            </button>
+          </div>
+
+          <div class="filter-bar">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="Search by title, location..."
+              oninput="filterListings()"
+            />
+            <select id="statusFilter" onchange="filterListings()">
+              <option value="">All Status</option>
+              <option>For Sale</option>
+              <option>For Rent</option>
+              <option>Sold</option>
+              <option>Rented</option>
+            </select>
+            <select id="typeFilter" onchange="filterListings()">
+              <option value="">All Types</option>
+              <option>Apartment</option>
+              <option>Villa</option>
+              <option>Loft</option>
+              <option>Home</option>
+              <option>Flat</option>
+              <option>Building</option>
+              <option>Office</option>
+              <option>Factory</option>
+              <option>Industry</option>
+            </select>
+          </div>
+
+          <div id="propertiesGrid" class="properties-grid">
+            <div class="loading-state">
+              <div class="spinner"></div>
+              <p>Loading properties...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADD / EDIT PROPERTY PAGE -->
+        <div id="page-add" class="page hidden">
+          <div class="page-header">
+            <div>
+              <h1 id="formTitle">Add New Property</h1>
+              <p>Fill in all property details</p>
+            </div>
+            <button class="btn-secondary" onclick="showPage('listings')">
+              ← Back to Listings
+            </button>
+          </div>
+
+          <div class="form-layout">
+            <!-- LEFT COLUMN -->
+            <div class="form-col-main">
+              <!-- BASIC INFO -->
+              <div class="form-section">
+                <h3 class="section-title">Basic Information</h3>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Property Name *</label>
+                    <input
+                      type="text"
+                      id="f_title"
+                      placeholder="e.g. Blueberry Villa"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Property Type *</label>
+                    <select id="f_type">
+                      <option value="">Select Type</option>
+                      <option>Apartment</option>
+                      <option>Villa</option>
+                      <option>Loft</option>
+                      <option>Home</option>
+                      <option>Flat</option>
+                      <option>Building</option>
+                      <option>Office</option>
+                      <option>Factory</option>
+                      <option>Industry</option>
+                      <option>Townhouse</option>
+                      <option>Studio</option>
+                      <option>Penthouse</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Status *</label>
+                    <select id="f_status">
+                      <option value="">Select Status</option>
+                      <option>For Sale</option>
+                      <option>For Rent</option>
+                      <option>Sold</option>
+                      <option>Rented</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Property Price (USD) *</label>
+                    <input
+                      type="number"
+                      id="f_price"
+                      placeholder="e.g. 425000"
+                      min="0"
+                    />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Full Address *</label>
+                  <input
+                    type="text"
+                    id="f_location"
+                    placeholder="e.g. 3891 Ranchview Dr. Richardson, California"
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Google Maps URL</label>
+                  <input
+                    type="text"
+                    id="f_google_maps_url"
+                    placeholder="https://maps.google.com/..."
+                  />
+                </div>
+                <div class="form-group">
+                  <label>Overview Description</label>
+                  <textarea
+                    id="f_description"
+                    rows="4"
+                    placeholder="Describe the property in detail..."
+                  ></textarea>
+                </div>
+                <div class="form-group">
+                  <label>Property Feature Description</label>
+                  <textarea
+                    id="f_features_desc"
+                    rows="3"
+                    placeholder="Key highlights and features of the property..."
+                  ></textarea>
+                </div>
+              </div>
+
+              <!-- SPECS -->
+              <div class="form-section">
+                <h3 class="section-title">Property Specs</h3>
+                <div class="form-grid-4">
+                  <div class="form-group">
+                    <label>Square Feet</label>
+                    <input
+                      type="number"
+                      id="f_sqft"
+                      placeholder="1570"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Bedrooms</label>
+                    <input
+                      type="number"
+                      id="f_bedrooms"
+                      placeholder="3"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Bathrooms</label>
+                    <input
+                      type="number"
+                      id="f_bathrooms"
+                      placeholder="2"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Kitchens</label>
+                    <input
+                      type="number"
+                      id="f_kitchens"
+                      placeholder="1"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- PROPERTY DETAILS -->
+              <div class="form-section">
+                <h3 class="section-title">Property Details</h3>
+                <div class="form-grid-3">
+                  <div class="form-group">
+                    <label>Bedrooms</label>
+                    <input
+                      type="number"
+                      id="pd_bedrooms"
+                      placeholder="03"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Bathrooms</label>
+                    <input
+                      type="number"
+                      id="pd_bathrooms"
+                      placeholder="02"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Furnishing</label>
+                    <select id="pd_furnishing">
+                      <option value="">Select</option>
+                      <option>Fully Furnished</option>
+                      <option>Semi Furnished</option>
+                      <option>Unfurnished</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Year Built</label>
+                    <input
+                      type="number"
+                      id="pd_year_built"
+                      placeholder="2010"
+                      min="1800"
+                      max="2100"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Floor</label>
+                    <input type="text" id="pd_floor" placeholder="Ground" />
+                  </div>
+                  <div class="form-group">
+                    <label>Garage Spaces</label>
+                    <input
+                      type="number"
+                      id="pd_garage"
+                      placeholder="03"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Ceiling Height</label>
+                    <input
+                      type="text"
+                      id="pd_ceiling_height"
+                      placeholder="3.2m"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Property Type</label>
+                    <select id="pd_property_type">
+                      <option value="">Select</option>
+                      <option>Apartment</option>
+                      <option>Villa</option>
+                      <option>Loft</option>
+                      <option>Home</option>
+                      <option>Flat</option>
+                      <option>Building</option>
+                      <option>Office</option>
+                      <option>Townhouse</option>
+                      <option>Studio</option>
+                      <option>Penthouse</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Renovation</label>
+                    <input
+                      type="text"
+                      id="pd_renovation"
+                      placeholder="e.g. 2022"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Status</label>
+                    <select id="pd_status">
+                      <option value="">Select</option>
+                      <option>For Sale</option>
+                      <option>For Rent</option>
+                      <option>Sold</option>
+                      <option>Rented</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Total Floors</label>
+                    <input
+                      type="number"
+                      id="pd_total_floors"
+                      placeholder="5"
+                      min="0"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Lot Size</label>
+                    <input
+                      type="text"
+                      id="pd_lot_size"
+                      placeholder="e.g. 500m²"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- UTILITY FEATURES -->
+              <div class="form-section">
+                <h3 class="section-title">Utility Features</h3>
+                <div class="form-grid-3">
+                  <div class="form-group">
+                    <label>Heating</label>
+                    <input
+                      type="text"
+                      id="uf_heating"
+                      placeholder="Natural gas"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Air Condition</label>
+                    <select id="uf_ac">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Intercom</label>
+                    <select id="uf_intercom">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Window Type</label>
+                    <input
+                      type="text"
+                      id="uf_window_type"
+                      placeholder="Aluminum frame"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Fireplace</label>
+                    <select id="uf_fireplace">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Cable TV</label>
+                    <select id="uf_cable_tv">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Elevator</label>
+                    <select id="uf_elevator">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>WiFi</label>
+                    <select id="uf_wifi">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Ventilation</label>
+                    <select id="uf_ventilation">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Solar Panels</label>
+                    <select id="uf_solar">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Smart Home</label>
+                    <select id="uf_smart_home">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Generator</label>
+                    <select id="uf_generator">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- OUTDOOR FEATURES -->
+              <div class="form-section">
+                <h3 class="section-title">Outdoor Features</h3>
+                <div class="form-grid-3">
+                  <div class="form-group">
+                    <label>Garage</label>
+                    <select id="of_garage">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Parking</label>
+                    <select id="of_parking">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Garden</label>
+                    <input type="text" id="of_garden" placeholder="30m²" />
+                  </div>
+                  <div class="form-group">
+                    <label>Disabled Access</label>
+                    <input
+                      type="text"
+                      id="of_disabled_access"
+                      placeholder="Ramp"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Swimming Pool</label>
+                    <select id="of_pool">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Fence</label>
+                    <select id="of_fence">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Security</label>
+                    <input
+                      type="text"
+                      id="of_security"
+                      placeholder="3 Cameras"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Pet Friendly</label>
+                    <select id="of_pet_friendly">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>BBQ Area</label>
+                    <select id="of_bbq">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Storage Room</label>
+                    <select id="of_storage">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Terrace / Balcony</label>
+                    <input
+                      type="text"
+                      id="of_terrace"
+                      placeholder="e.g. 20m²"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label>Sports Court</label>
+                    <select id="of_sports_court">
+                      <option value="">--</option>
+                      <option>Yes</option>
+                      <option>No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AMENITIES -->
+              <div class="form-section">
+                <h3 class="section-title">Amenities</h3>
+                <p class="section-sub">
+                  Select all amenities available at this property
+                </p>
+                <div class="amenities-grid">
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_ac_heating" /><span
+                      >A/C & Heating</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_garages" /><span
+                      >Garages</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_garden" /><span
+                      >Garden</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_disabled_access" /><span
+                      >Disabled Access</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_pool" /><span
+                      >Swimming Pool</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_parking" /><span
+                      >Parking</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_wifi" /><span
+                      >WiFi</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_pet" /><span
+                      >Pet Friendly</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_ceiling" /><span
+                      >Ceiling Height</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_fireplace" /><span
+                      >Fireplace</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_playground" /><span
+                      >Play Ground</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_elevator" /><span
+                      >Elevator</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_bbq" /><span
+                      >BBQ Area</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_storage" /><span
+                      >Storage Room</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_terrace" /><span
+                      >Terrace</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_laundry" /><span
+                      >Laundry Room</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_gym" /><span
+                      >Gym / Fitness</span
+                    ></label
+                  >
+                  <label class="checkbox-item"
+                    ><input type="checkbox" id="am_solar" /><span
+                      >Solar Panels</span
+                    ></label
+                  >
+                </div>
+              </div>
+
+              <!-- WHAT'S NEARBY -->
+              <div class="form-section">
+                <h3 class="section-title">What's Nearby</h3>
+                <div class="form-grid-3">
+                  <div class="form-group">
+                    <label>School & College</label>
+                    <input type="text" id="nb_school" placeholder="0.9km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Grocery Center</label>
+                    <input type="text" id="nb_grocery" placeholder="0.2km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Metro Station</label>
+                    <input type="text" id="nb_metro" placeholder="0.7km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Gym</label>
+                    <input type="text" id="nb_gym" placeholder="2.3km" />
+                  </div>
+                  <div class="form-group">
+                    <label>University</label>
+                    <input type="text" id="nb_university" placeholder="2.7km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Hospital</label>
+                    <input type="text" id="nb_hospital" placeholder="1.7km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Shopping Mall</label>
+                    <input type="text" id="nb_mall" placeholder="1.1km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Police Station</label>
+                    <input type="text" id="nb_police" placeholder="1.2km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Bus Station</label>
+                    <input type="text" id="nb_bus" placeholder="1.1km" />
+                  </div>
+                  <div class="form-group">
+                    <label>River</label>
+                    <input type="text" id="nb_river" placeholder="3.1km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Market</label>
+                    <input type="text" id="nb_market" placeholder="0.5km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Restaurant</label>
+                    <input type="text" id="nb_restaurant" placeholder="0.3km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Park</label>
+                    <input type="text" id="nb_park" placeholder="1.0km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Pharmacy</label>
+                    <input type="text" id="nb_pharmacy" placeholder="0.6km" />
+                  </div>
+                  <div class="form-group">
+                    <label>Airport</label>
+                    <input type="text" id="nb_airport" placeholder="12km" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN -->
+            <div class="form-col-side">
+              <!-- PROPERTY IMAGES -->
+              <div class="form-section">
+                <h3 class="section-title">
+                  Property Images
+                  <span class="count-badge" id="imgCountBadge">0 / 5</span>
+                </h3>
+                <div
+                  class="upload-zone"
+                  id="uploadZone"
+                  onclick="document.getElementById('imageInput').click()"
+                >
+                  <div class="upload-icon">🖼</div>
+                  <p>Click to upload images</p>
+                  <span>Max 5 images · PNG, JPG up to 10MB each</span>
+                  <input
+                    type="file"
+                    id="imageInput"
+                    multiple
+                    accept="image/*"
+                    onchange="handleImageSelect(event)"
+                    style="display: none"
+                  />
+                </div>
+                <div id="existingImages" class="image-preview-grid"></div>
+                <div id="imagePreviewGrid" class="image-preview-grid"></div>
+              </div>
+
+              <!-- FLOOR PLANS -->
+              <div class="form-section">
+                <h3 class="section-title">
+                  Floor Plans
+                  <span class="count-badge" id="fpCountBadge">0 / 3</span>
+                </h3>
+                <div
+                  class="upload-zone small-upload"
+                  onclick="document.getElementById('floorInput').click()"
+                >
+                  <div class="upload-icon">📐</div>
+                  <p>Upload floor plan images</p>
+                  <span>Max 3 floor plans · PNG, JPG up to 10MB each</span>
+                  <input
+                    type="file"
+                    id="floorInput"
+                    multiple
+                    accept="image/*"
+                    onchange="handleFloorPlanSelect(event)"
+                    style="display: none"
+                  />
+                </div>
+                <div id="existingFloorPlans" class="image-preview-grid"></div>
+                <div id="floorPreviewGrid" class="image-preview-grid"></div>
+              </div>
+
+              <!-- SAVE BUTTON -->
+              <div id="formError" class="form-error hidden"></div>
+              <button
+                class="btn-primary save-btn"
+                id="saveBtn"
+                onclick="saveProperty()"
+              >
+                <span id="saveBtnText">💾 Save Property</span>
+              </button>
+              <input type="hidden" id="editingId" value="" />
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW PROPERTY PAGE -->
+        <div id="page-view" class="page hidden">
+          <div class="page-header">
+            <div>
+              <h1 id="viewTitle">Property Details</h1>
+              <p id="viewLocation"></p>
+            </div>
+            <div style="display: flex; gap: 12px">
+              <button class="btn-secondary" onclick="showPage('listings')">
+                ← Back
+              </button>
+              <button class="btn-primary" id="editFromViewBtn" onclick="">
+                ✏ Edit
+              </button>
+            </div>
+          </div>
+          <div id="viewContent"></div>
+        </div>
+      </main>
+    </div>
+
+    <!-- DELETE MODAL -->
+    <div id="deleteModal" class="modal-overlay hidden">
+      <div class="modal">
+        <h3>Delete Property?</h3>
+        <p>
+          This will permanently delete the property and all its images. This
+          action cannot be undone.
+        </p>
+        <div class="modal-actions">
+          <button class="btn-secondary" onclick="closeDeleteModal()">
+            Cancel
+          </button>
+          <button class="btn-danger" onclick="confirmDelete()">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
