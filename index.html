@@ -119,6 +119,17 @@
             <span class="nav-icon">✉</span> Contacts
             <span id="contactNewBadge" class="nav-badge hidden">0</span>
           </a>
+          <a
+            href="#"
+            class="nav-item"
+            onclick="
+              showPage('sell');
+              return false;
+            "
+          >
+            <span class="nav-icon">🏷</span> Sell Requests
+            <span id="sellNewBadge" class="nav-badge hidden">0</span>
+          </a>
         </nav>
         <div class="sidebar-footer">
           <div class="admin-badge">
@@ -1161,6 +1172,117 @@
             </table>
           </div>
         </div>
+
+        <!-- SELL REQUESTS PAGE -->
+        <div id="page-sell" class="page hidden">
+          <div class="page-header">
+            <div>
+              <h1>Sell Requests</h1>
+              <p id="sellCount">Loading…</p>
+            </div>
+            <div class="header-actions">
+              <button
+                class="btn-secondary"
+                onclick="loadSellRequests()"
+                title="Refresh"
+              >
+                ↺ Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-bar">
+            <div class="stat-card gold">
+              <div class="stat-label">Total</div>
+              <div class="stat-value" id="sStatTotal">—</div>
+              <div class="stat-sub">requests</div>
+              <div class="stat-icon">📋</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value" id="sStatPending">—</div>
+              <div class="stat-sub">awaiting review</div>
+              <div class="stat-icon">⏳</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Approved</div>
+              <div class="stat-value" id="sStatApproved">—</div>
+              <div class="stat-sub">added to listings</div>
+              <div class="stat-icon">✓</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Rejected</div>
+              <div class="stat-value" id="sStatRejected">—</div>
+              <div class="stat-sub">declined</div>
+              <div class="stat-icon">✕</div>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <div class="search-wrap" style="min-width: 260px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                id="sellSearch"
+                placeholder="Search name, title, location…"
+                oninput="filterSellRequests()"
+              />
+            </div>
+            <select id="sellStatusFilter" onchange="filterSellRequests()">
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <!-- Grid -->
+          <!-- Table -->
+          <div class="contacts-table-wrap">
+            <table class="contacts-table">
+              <thead>
+                <tr>
+                  <th>Seller</th>
+                  <th>Property Title</th>
+                  <th>Type</th>
+                  <th>Price</th>
+                  <th>Location</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sellRequestsTable">
+                <tr>
+                  <td
+                    colspan="8"
+                    style="
+                      text-align: center;
+                      padding: 60px;
+                      color: var(--text-muted);
+                    "
+                  >
+                    <div class="spinner" style="margin: 0 auto 12px"></div>
+                    Loading sell requests…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </main>
     </div>
 
@@ -1188,6 +1310,18 @@
           </button>
           <button class="btn-danger" onclick="confirmDelete()">Delete</button>
         </div>
+      </div>
+    </div>
+
+    <!-- SELL REQUEST DETAIL MODAL -->
+    <div
+      id="sellModal"
+      class="modal-overlay hidden"
+      onclick="if (event.target === this) closeSellModal();"
+    >
+      <div class="modal contact-modal">
+        <div class="modal-close-btn" onclick="closeSellModal()">✕</div>
+        <div id="sellModalContent"></div>
       </div>
     </div>
 

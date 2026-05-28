@@ -1,5 +1,5 @@
 // ============================================================
-//  ESTATE ADMIN — Application Logic (v2)
+//  ESTATE ADMIN — Application Logic (v3 — with Sell Requests)
 // ============================================================
 
 const ADMIN_USER = "admin";
@@ -44,7 +44,6 @@ function doLogin() {
 }
 
 function checkSession() {
-  // Always start with both screens hidden — avoids flash-of-login on reload
   document.getElementById("loginScreen").classList.add("hidden");
   document.getElementById("portal").classList.add("hidden");
 
@@ -60,7 +59,6 @@ function checkSession() {
       }
     } catch (e) {}
   }
-  // Only show login after session check fails
   document.getElementById("loginScreen").classList.remove("hidden");
 }
 
@@ -80,7 +78,6 @@ function doLogout() {
   document.getElementById("loginError").classList.add("hidden");
 }
 
-// Enter on password field
 document.getElementById("loginPass").addEventListener("keydown", (e) => {
   if (e.key === "Enter") doLogin();
 });
@@ -90,10 +87,10 @@ document.getElementById("loginUser").addEventListener("keydown", (e) => {
 
 // ─── KEYBOARD SHORTCUTS ───────────────────────────────────────
 document.addEventListener("keydown", (e) => {
-  // Escape closes modals
   if (e.key === "Escape") {
     closeDeleteModal();
     closeLightbox();
+    closeSellModal();
   }
 });
 
@@ -123,6 +120,7 @@ function showPage(name, skipReset = false) {
     listings: "[onclick=\"showPage('listings');return false;\"]",
     add: "[onclick=\"showPage('add');return false;\"]",
     contacts: "[onclick=\"showPage('contacts');return false;\"]",
+    sell: "[onclick=\"showPage('sell');return false;\"]",
   };
   if (navMap[name]) {
     const el = document.querySelector(navMap[name]);
@@ -135,9 +133,8 @@ function showPage(name, skipReset = false) {
     document.getElementById("editingId").value = "";
   }
 
-  if (name === "contacts") {
-    loadContacts();
-  }
+  if (name === "contacts") loadContacts();
+  if (name === "sell") loadSellRequests();
 }
 
 // ─── LISTINGS ─────────────────────────────────────────────────
@@ -171,15 +168,12 @@ function updateStats() {
   document.getElementById("statSale").textContent = forSale;
   document.getElementById("statRent").textContent = forRent;
 
-  // Format value
   let valStr;
-  if (totalValue >= 1_000_000) {
+  if (totalValue >= 1_000_000)
     valStr = "$" + (totalValue / 1_000_000).toFixed(1) + "M";
-  } else if (totalValue >= 1_000) {
+  else if (totalValue >= 1_000)
     valStr = "$" + (totalValue / 1_000).toFixed(0) + "K";
-  } else {
-    valStr = "$" + totalValue;
-  }
+  else valStr = "$" + totalValue;
   document.getElementById("statValue").textContent = valStr;
 }
 
@@ -199,7 +193,6 @@ function filterListings() {
     return matchSearch && matchStatus && matchType;
   });
 
-  // Sort
   filtered = filtered.slice().sort((a, b) => {
     switch (sort) {
       case "oldest":
@@ -209,7 +202,7 @@ function filterListings() {
       case "price_desc":
         return (b.price || 0) - (a.price || 0);
       default:
-        return new Date(b.created_at) - new Date(a.created_at); // newest
+        return new Date(b.created_at) - new Date(a.created_at);
     }
   });
 
@@ -221,7 +214,6 @@ function renderListings(properties) {
   document.getElementById("listingCount").textContent =
     `${properties.length} propert${properties.length !== 1 ? "ies" : "y"} found`;
 
-  // Update container class
   grid.className =
     currentView === "list" ? "properties-list" : "properties-grid";
 
@@ -250,7 +242,7 @@ function renderCard(p) {
         <div class="card-actions" onclick="event.stopPropagation()">
           <button class="card-btn copy" onclick="copyPropertyId('${p.id}')" title="Copy ID">⎘</button>
           <button class="card-btn edit" onclick="editProperty('${p.id}')" title="Edit">✏</button>
-          <button class="card-btn del" onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
+          <button class="card-btn del"  onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
         </div>
       </div>
       <div class="card-body">
@@ -293,7 +285,7 @@ function renderListItem(p) {
       <div class="list-price">${price}</div>
       <div class="list-actions" onclick="event.stopPropagation()">
         <button class="card-btn edit" onclick="editProperty('${p.id}')" title="Edit">✏</button>
-        <button class="card-btn del" onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
+        <button class="card-btn del"  onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
       </div>
     </div>`;
 }
@@ -930,7 +922,6 @@ function editProperty(id) {
   setVal("ag_phone", ag.phone);
   setVal("ag_location", ag.location);
 
-  // Existing images
   const existingImgGrid = document.getElementById("existingImages");
   (p.images || []).forEach((url, i) => {
     const wrapper = document.createElement("div");
@@ -975,7 +966,7 @@ function viewProperty(id) {
   const floorPlans = p.floor_plans || (p.floor_plan ? [p.floor_plan] : []);
 
   const imgHtml = (p.images || []).length
-    ? `<div class="view-images">${p.images.map((u, i) => `<img src="${u}" alt="" onclick="openLightbox('${u}')" />`).join("")}</div>`
+    ? `<div class="view-images">${p.images.map((u) => `<img src="${u}" alt="" onclick="openLightbox('${u}')" />`).join("")}</div>`
     : "";
 
   const dr = (k, v) =>
@@ -1004,7 +995,6 @@ function viewProperty(id) {
 
   document.getElementById("viewContent").innerHTML = `
     ${imgHtml}
-
     <div class="view-stats">
       ${p.sqft ? `<div class="stat-pill">⬜ ${Number(p.sqft).toLocaleString()} sqft</div>` : ""}
       ${p.bedrooms ? `<div class="stat-pill">🛏 ${p.bedrooms} Bed</div>` : ""}
@@ -1013,33 +1003,22 @@ function viewProperty(id) {
       <div class="stat-pill price-pill">$${Number(p.price).toLocaleString()}</div>
       ${p.status ? `<div class="stat-pill">${p.status}</div>` : ""}
     </div>
-
     ${p.google_maps_url ? `<a href="${p.google_maps_url}" target="_blank" class="btn-map">📍 View on Google Maps</a>` : ""}
-
     <div class="view-grid">
       <div class="view-main">
-
         ${p.description ? `<div class="view-section"><h4>Overview</h4><p>${p.description}</p></div>` : ""}
         ${p.features_description ? `<div class="view-section"><h4>Property Features</h4><p>${p.features_description}</p></div>` : ""}
-
         <div class="view-section">
           <h4>Property Details</h4>
           <div class="detail-grid">
-            ${dr("Bedrooms", pd.bedrooms || p.bedrooms)}
-            ${dr("Furnishing", pd.furnishing)}
-            ${dr("Bathrooms", pd.bathrooms || p.bathrooms)}
-            ${dr("Year Built", pd.year_built)}
-            ${dr("Floor", pd.floor)}
-            ${dr("Garage", pd.garage)}
-            ${dr("Ceiling Height", pd.ceiling_height)}
-            ${dr("Property Type", pd.property_type || p.property_type)}
-            ${dr("Renovation", pd.renovation)}
-            ${dr("Status", pd.status || p.status)}
-            ${dr("Total Floors", pd.total_floors)}
-            ${dr("Lot Size", pd.lot_size)}
+            ${dr("Bedrooms", pd.bedrooms || p.bedrooms)} ${dr("Furnishing", pd.furnishing)}
+            ${dr("Bathrooms", pd.bathrooms || p.bathrooms)} ${dr("Year Built", pd.year_built)}
+            ${dr("Floor", pd.floor)} ${dr("Garage", pd.garage)}
+            ${dr("Ceiling Height", pd.ceiling_height)} ${dr("Property Type", pd.property_type || p.property_type)}
+            ${dr("Renovation", pd.renovation)} ${dr("Status", pd.status || p.status)}
+            ${dr("Total Floors", pd.total_floors)} ${dr("Lot Size", pd.lot_size)}
           </div>
         </div>
-
         <div class="view-section">
           <h4>Utility Features</h4>
           <div class="detail-grid">
@@ -1051,7 +1030,6 @@ function viewProperty(id) {
             ${dr("Smart Home", uf.smart_home)} ${dr("Generator", uf.generator)}
           </div>
         </div>
-
         <div class="view-section">
           <h4>Outdoor Features</h4>
           <div class="detail-grid">
@@ -1063,45 +1041,23 @@ function viewProperty(id) {
             ${dr("Terrace", of_.terrace)} ${dr("Sports Court", of_.sports_court)}
           </div>
         </div>
-
-        ${
-          (p.amenities || []).length
-            ? `
-        <div class="view-section">
-          <h4>Amenities</h4>
-          <div class="amenity-tags">${p.amenities.map((a) => `<span class="amenity-tag">✓ ${a}</span>`).join("")}</div>
-        </div>`
-            : ""
-        }
-
-        ${
-          floorPlans.length
-            ? `
-        <div class="view-section">
-          <h4>Floor Plans</h4>
-          <div class="floor-plans-grid">${floorPlans.map((url, i) => `<img src="${url}" alt="Floor Plan ${i + 1}" onclick="openLightbox('${url}')" style="cursor:zoom-in" />`).join("")}</div>
-        </div>`
-            : ""
-        }
-
+        ${(p.amenities || []).length ? `<div class="view-section"><h4>Amenities</h4><div class="amenity-tags">${p.amenities.map((a) => `<span class="amenity-tag">✓ ${a}</span>`).join("")}</div></div>` : ""}
+        ${floorPlans.length ? `<div class="view-section"><h4>Floor Plans</h4><div class="floor-plans-grid">${floorPlans.map((url, i) => `<img src="${url}" alt="Floor Plan ${i + 1}" onclick="openLightbox('${url}')" style="cursor:zoom-in" />`).join("")}</div></div>` : ""}
         <div class="view-section">
           <h4>What's Nearby</h4>
           <div class="nearby-grid">
             ${nr("🏫", "School & College", nb.school)} ${nr("🛒", "Grocery", nb.grocery)}
-            ${nr("🚇", "Metro Station", nb.metro)} ${nr("💪", "Gym", nb.gym)}
-            ${nr("🎓", "University", nb.university)} ${nr("🏥", "Hospital", nb.hospital)}
-            ${nr("🛍", "Shopping Mall", nb.mall)} ${nr("🚔", "Police Station", nb.police)}
-            ${nr("🚌", "Bus Station", nb.bus)} ${nr("🏞", "River", nb.river)}
-            ${nr("🏪", "Market", nb.market)} ${nr("🍽", "Restaurant", nb.restaurant)}
-            ${nr("🌳", "Park", nb.park)} ${nr("💊", "Pharmacy", nb.pharmacy)}
+            ${nr("🚇", "Metro Station", nb.metro)}     ${nr("💪", "Gym", nb.gym)}
+            ${nr("🎓", "University", nb.university)}   ${nr("🏥", "Hospital", nb.hospital)}
+            ${nr("🛍", "Shopping Mall", nb.mall)}      ${nr("🚔", "Police Station", nb.police)}
+            ${nr("🚌", "Bus Station", nb.bus)}         ${nr("🏞", "River", nb.river)}
+            ${nr("🏪", "Market", nb.market)}           ${nr("🍽", "Restaurant", nb.restaurant)}
+            ${nr("🌳", "Park", nb.park)}               ${nr("💊", "Pharmacy", nb.pharmacy)}
             ${nr("✈", "Airport", nb.airport)}
           </div>
         </div>
-
       </div>
-
       <div class="view-sidebar">
-
         ${
           ag.name
             ? `
@@ -1117,7 +1073,6 @@ function viewProperty(id) {
         </div>`
             : ""
         }
-
         <div class="quick-info-card">
           <h4>Listing Info</h4>
           <div class="quick-row"><span>Listed</span><strong>${createdDate}</strong></div>
@@ -1127,10 +1082,8 @@ function viewProperty(id) {
           <div class="quick-row"><span>Price</span><strong>$${Number(p.price).toLocaleString()}</strong></div>
           ${p.sqft ? `<div class="quick-row"><span>Size</span><strong>${Number(p.sqft).toLocaleString()} sqft</strong></div>` : ""}
         </div>
-
       </div>
-    </div>
-  `;
+    </div>`;
 
   showPage("view");
 }
@@ -1200,7 +1153,7 @@ function showFormError(msg) {
   el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-// ─── CONTACTS PAGE ─────────────────────────────────────────────
+// ─── CONTACTS PAGE ────────────────────────────────────────────
 let allContacts = [];
 let contactSortField = "created_at";
 let contactSortDir = "desc";
@@ -1242,7 +1195,6 @@ async function loadContacts() {
 function updateContactStats() {
   const total = allContacts.length;
   const newC = allContacts.filter((c) => c.status === "new").length;
-  const contacted = allContacts.filter((c) => c.status === "contacted").length;
   const inProgress = allContacts.filter((c) =>
     ["qualified", "viewing_scheduled", "negotiating"].includes(c.status),
   ).length;
@@ -1274,7 +1226,6 @@ function filterContacts() {
     return matchSearch && matchStatus && matchPriority && matchType;
   });
 
-  // Sort
   filtered.sort((a, b) => {
     let va = a[contactSortField] ?? "";
     let vb = b[contactSortField] ?? "";
@@ -1333,33 +1284,33 @@ function renderContacts(contacts) {
           : "—";
 
       return `
-      <tr class="contact-row-item" onclick="openContactModal('${c.id}')">
-        <td>
-          <div class="contact-name-cell">
-            <div class="contact-avatar">${(c.name || "?").charAt(0).toUpperCase()}</div>
-            <div>
-              <div class="contact-name">${escHtml(c.name)}</div>
-              <div class="contact-email">${escHtml(c.email)}</div>
-            </div>
+    <tr class="contact-row-item" onclick="openContactModal('${c.id}')">
+      <td>
+        <div class="contact-name-cell">
+          <div class="contact-avatar">${(c.name || "?").charAt(0).toUpperCase()}</div>
+          <div>
+            <div class="contact-name">${escHtml(c.name)}</div>
+            <div class="contact-email">${escHtml(c.email)}</div>
           </div>
-        </td>
-        <td><span class="contact-type-badge">${escHtml(c.inquiry_type || "—")}</span></td>
-        <td>${escHtml(c.property_name || "—")}</td>
-        <td>${budget}</td>
-        <td><span class="contact-status-badge ${st.class}">${st.label}</span></td>
-        <td><span class="contact-priority-badge ${pr.class}">${pr.label}</span></td>
-        <td class="contact-date">${date}</td>
-        <td onclick="event.stopPropagation()">
-          <select class="contact-status-select" onchange="quickUpdateStatus('${c.id}', this.value)">
-            ${Object.entries(CONTACT_STATUS_LABELS)
-              .map(
-                ([v, s]) =>
-                  `<option value="${v}" ${c.status === v ? "selected" : ""}>${s.label}</option>`,
-              )
-              .join("")}
-          </select>
-        </td>
-      </tr>`;
+        </div>
+      </td>
+      <td><span class="contact-type-badge">${escHtml(c.inquiry_type || "—")}</span></td>
+      <td>${escHtml(c.property_name || "—")}</td>
+      <td>${budget}</td>
+      <td><span class="contact-status-badge ${st.class}">${st.label}</span></td>
+      <td><span class="contact-priority-badge ${pr.class}">${pr.label}</span></td>
+      <td class="contact-date">${date}</td>
+      <td onclick="event.stopPropagation()">
+        <select class="contact-status-select" onchange="quickUpdateStatus('${c.id}', this.value)">
+          ${Object.entries(CONTACT_STATUS_LABELS)
+            .map(
+              ([v, s]) =>
+                `<option value="${v}" ${c.status === v ? "selected" : ""}>${s.label}</option>`,
+            )
+            .join("")}
+        </select>
+      </td>
+    </tr>`;
     })
     .join("");
 }
@@ -1375,26 +1326,12 @@ async function quickUpdateStatus(id, newStatus) {
     if (idx !== -1) allContacts[idx].status = newStatus;
     updateContactStats();
     showToast("Status updated", "success");
-    renderContacts(
-      allContacts.filter((c) => {
-        const search = document
-          .getElementById("contactSearch")
-          .value.toLowerCase();
-        const status = document.getElementById("contactStatusFilter").value;
-        const matchSearch =
-          !search ||
-          c.name?.toLowerCase().includes(search) ||
-          c.email?.toLowerCase().includes(search);
-        const matchStatus = !status || c.status === status;
-        return matchSearch && matchStatus;
-      }),
-    );
+    filterContacts();
   } catch (err) {
     showToast("Error: " + err.message, "error");
   }
 }
 
-// ── Contact detail modal ───────────────────────────────────────
 function openContactModal(id) {
   const c = allContacts.find((x) => x.id === id);
   if (!c) return;
@@ -1427,7 +1364,6 @@ function openContactModal(id) {
         <span class="contact-priority-badge ${pr.class}">${pr.label}</span>
       </div>
     </div>
-
     <div class="cmodal-grid">
       <div class="cmodal-section">
         <h4>Inquiry Details</h4>
@@ -1438,7 +1374,6 @@ function openContactModal(id) {
         <div class="cmodal-row"><span>Timeline</span><strong>${escHtml(c.move_timeline || "—")}</strong></div>
         <div class="cmodal-row"><span>Submitted</span><strong>${date}</strong></div>
       </div>
-
       <div class="cmodal-section">
         <h4>Contact Preferences</h4>
         <div class="cmodal-row"><span>Preferred Contact</span><strong>${escHtml(c.preferred_contact || "Any")}</strong></div>
@@ -1447,12 +1382,10 @@ function openContactModal(id) {
         <div class="cmodal-row"><span>Source</span><strong>${escHtml(c.source || "website")}</strong></div>
       </div>
     </div>
-
     <div class="cmodal-section cmodal-full">
       <h4>Message</h4>
       <p class="cmodal-message">${escHtml(c.message || "—")}</p>
     </div>
-
     <div class="cmodal-section cmodal-full">
       <h4>Update Status & Priority</h4>
       <div class="cmodal-actions-row">
@@ -1480,13 +1413,11 @@ function openContactModal(id) {
         </div>
       </div>
     </div>
-
     <div class="cmodal-section cmodal-full">
       <h4>Admin Notes</h4>
       <textarea id="cm_notes" rows="3" placeholder="Add internal notes…" style="width:100%;background:var(--dark3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;outline:none;">${escHtml(c.admin_notes || "")}</textarea>
       <button class="btn-primary" style="margin-top:8px" onclick="saveContactNotes('${c.id}')">Save Notes</button>
-    </div>
-  `;
+    </div>`;
 
   document.getElementById("contactModal").classList.remove("hidden");
 }
@@ -1515,6 +1446,410 @@ async function saveContactNotes(id) {
 function closeContactModal() {
   document.getElementById("contactModal").classList.add("hidden");
   loadContacts();
+}
+
+// ─── SELL REQUESTS ────────────────────────────────────────────
+let allSellRequests = [];
+let filteredSellRequests = [];
+
+async function loadSellRequests() {
+  const tbody = document.getElementById("sellRequestsTable");
+  if (!tbody) return;
+  tbody.innerHTML = `
+    <tr><td colspan="8" style="text-align:center;padding:60px;color:var(--text-muted)">
+      <div class="spinner" style="margin:0 auto 12px"></div>Loading…
+    </td></tr>`;
+
+  try {
+    const { data, error } = await supabase
+      .from("sell_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    allSellRequests = data || [];
+    updateSellStats(allSellRequests);
+    filterSellRequests();
+    updateSellBadge(allSellRequests);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#e84545">
+      ⚠ ${err.message}</td></tr>`;
+  }
+}
+
+function updateSellStats(list) {
+  const sTotal = document.getElementById("sStatTotal");
+  const sPending = document.getElementById("sStatPending");
+  const sReviewed = document.getElementById("sStatReviewed");
+  const sApproved = document.getElementById("sStatApproved");
+  const sCount = document.getElementById("sellCount");
+
+  if (sTotal) sTotal.textContent = list.length;
+  if (sPending)
+    sPending.textContent = list.filter(
+      (r) => r.review_status === "pending",
+    ).length;
+  if (sReviewed)
+    sReviewed.textContent = list.filter(
+      (r) => r.review_status === "reviewed",
+    ).length;
+  if (sApproved)
+    sApproved.textContent = list.filter(
+      (r) => r.review_status === "approved",
+    ).length;
+  if (sCount)
+    sCount.textContent = `${list.length} total sell request${list.length !== 1 ? "s" : ""}`;
+}
+
+function updateSellBadge(list) {
+  const pending = list.filter((r) => r.review_status === "pending").length;
+  const badge = document.getElementById("sellNewBadge");
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.classList.remove("hidden");
+  } else badge.classList.add("hidden");
+}
+
+function filterSellRequests() {
+  const q = (document.getElementById("sellSearch")?.value || "").toLowerCase();
+  const statusF = document.getElementById("sellStatusFilter")?.value || "";
+  const typeF = document.getElementById("sellTypeFilter")?.value || "";
+
+  filteredSellRequests = allSellRequests.filter((r) => {
+    const matchQ =
+      !q ||
+      r.contact_name?.toLowerCase().includes(q) ||
+      r.contact_email?.toLowerCase().includes(q) ||
+      r.title?.toLowerCase().includes(q) ||
+      r.location?.toLowerCase().includes(q);
+    const matchStatus = !statusF || r.review_status === statusF;
+    const matchType = !typeF || r.property_type === typeF;
+    return matchQ && matchStatus && matchType;
+  });
+
+  renderSellTable(filteredSellRequests);
+}
+
+function renderSellTable(list) {
+  const tbody = document.getElementById("sellRequestsTable");
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:60px;color:var(--text-muted)">No sell requests found.</td></tr>`;
+    return;
+  }
+
+  const statusColors = {
+    pending: "#ff9800",
+    reviewed: "#2196f3",
+    approved: "#4caf50",
+    rejected: "#e84545",
+  };
+
+  tbody.innerHTML = list
+    .map((r) => {
+      const color = statusColors[r.review_status] || "#888";
+      const date = new Date(r.created_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const price = r.price ? "$" + Number(r.price).toLocaleString() : "—";
+      return `
+      <tr style="cursor:pointer" onclick="openSellModal('${r.id}')">
+        <td>
+          <div style="font-weight:600;font-size:13.5px">${escHtml(r.contact_name || "—")}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.contact_email || "")}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.contact_phone || "")}</div>
+        </td>
+        <td style="max-width:200px">
+          <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${escHtml(r.title || "—")}
+          </div>
+        </td>
+        <td><span style="font-size:12px;background:var(--dark3);padding:3px 9px;border-radius:6px">${escHtml(r.property_type || "—")}</span></td>
+        <td style="font-weight:700">${price}</td>
+        <td style="font-size:12.5px;color:var(--text-muted)">${escHtml(r.location || "—")}</td>
+        <td>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+            background:${color}22;color:${color};font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">
+            <span style="width:6px;height:6px;border-radius:50%;background:${color};display:inline-block"></span>
+            ${r.review_status}
+          </span>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted)">${date}</td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:6px">
+            <button class="btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openSellModal('${r.id}')">View</button>
+            <button class="btn-primary"   style="padding:5px 10px;font-size:12px" onclick="approveSellRequest('${r.id}')">→ Add</button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function openSellModal(id) {
+  const r = allSellRequests.find((x) => x.id === id);
+  if (!r) return;
+
+  if (r.review_status === "pending") {
+    supabase
+      .from("sell_requests")
+      .update({ review_status: "reviewed" })
+      .eq("id", id)
+      .then(() => {
+        r.review_status = "reviewed";
+        updateSellBadge(allSellRequests);
+        renderSellTable(filteredSellRequests);
+      });
+  }
+
+  const statusColors = {
+    pending: "#ff9800",
+    reviewed: "#2196f3",
+    approved: "#4caf50",
+    rejected: "#e84545",
+  };
+  const color = statusColors[r.review_status] || "#888";
+  const price = r.price ? "$" + Number(r.price).toLocaleString() : "—";
+
+  const renderKV = (obj) => {
+    if (!obj || Object.keys(obj).length === 0)
+      return "<em style='color:var(--text-muted);font-size:12px'>None provided</em>";
+    return Object.entries(obj)
+      .filter(([, v]) => v)
+      .map(
+        ([k, v]) => `
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text-muted);text-transform:capitalize">${k.replace(/_/g, " ")}</span>
+        <span style="font-weight:600;color:var(--text)">${escHtml(String(v))}</span>
+      </div>`,
+      )
+      .join("");
+  };
+
+  const imgHtml =
+    (r.images || []).length > 0
+      ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${r.images.map((url) => `<img src="${url}" style="width:90px;height:70px;object-fit:cover;border-radius:7px;border:1px solid var(--border)" onclick="openLightbox('${url}')" style="cursor:zoom-in" />`).join("")}</div>`
+      : "<em style='color:var(--text-muted);font-size:12px'>No images uploaded</em>";
+
+  document.getElementById("sellModalContent").innerHTML = `
+    <div style="padding:8px 0">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#e84545,#1a1a1a);
+          display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.3rem;font-weight:700;flex-shrink:0">
+          ${(r.contact_name || "?")[0].toUpperCase()}
+        </div>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:var(--text)">${escHtml(r.contact_name || "—")}</div>
+          <div style="font-size:13px;color:var(--text-muted)">${escHtml(r.contact_email || "")} · ${escHtml(r.contact_phone || "")}</div>
+        </div>
+        <span style="margin-left:auto;padding:5px 14px;border-radius:20px;background:${color}22;
+          color:${color};font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">
+          ${r.review_status}
+        </span>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:22px">
+        <a href="mailto:${encodeURIComponent(r.contact_email || "")}?subject=Your property listing: ${encodeURIComponent(r.title || "")}"
+          style="flex:1;padding:10px;border-radius:9px;background:var(--gold);color:#000;
+            text-align:center;text-decoration:none;font-size:13px;font-weight:700">
+          ✉ Email Seller
+        </a>
+        <a href="tel:${encodeURIComponent(r.contact_phone || "")}"
+          style="flex:1;padding:10px;border-radius:9px;background:var(--dark3);color:var(--text);
+            text-align:center;text-decoration:none;font-size:13px;font-weight:700;border:1px solid var(--border)">
+          📞 Call Seller
+        </a>
+        <button onclick="approveSellRequest('${r.id}')"
+          style="flex:1;padding:10px;border-radius:9px;background:#4caf50;color:#fff;
+            border:none;font-size:13px;font-weight:700;cursor:pointer">
+          ✓ Add to Listings
+        </button>
+      </div>
+
+      <div style="background:var(--dark3);border-radius:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:12px">Property Summary</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">${escHtml(r.title || "—")}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">📍 ${escHtml(r.location || "—")}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+          ${[
+            ["Price", price],
+            ["Type", r.property_type || "—"],
+            ["Status", r.status || "—"],
+            ["sqft", r.sqft ? r.sqft.toLocaleString() : "—"],
+          ]
+            .map(
+              ([l, v]) => `
+            <div style="background:var(--dark2);border-radius:8px;border:1px solid var(--border);padding:10px 6px">
+              <div style="font-size:10px;color:var(--text-muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">${l}</div>
+              <div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px">${v}</div>
+            </div>`,
+            )
+            .join("")}
+        </div>
+      </div>
+
+      ${
+        r.description
+          ? `
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Description</div>
+          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0">${escHtml(r.description)}</p>
+        </div>`
+          : ""
+      }
+
+      ${
+        Object.keys(r.property_details || {}).length
+          ? `
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Property Details</div>
+          ${renderKV(r.property_details)}
+        </div>`
+          : ""
+      }
+
+      ${
+        Object.keys(r.whats_nearby || {}).length
+          ? `
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">What's Nearby</div>
+          ${renderKV(r.whats_nearby)}
+        </div>`
+          : ""
+      }
+
+      ${
+        (r.amenities || []).length
+          ? `
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Amenities</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${r.amenities.map((a) => `<span style="padding:5px 12px;border-radius:20px;background:var(--dark3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text)">${escHtml(a)}</span>`).join("")}
+          </div>
+        </div>`
+          : ""
+      }
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Images</div>
+        ${imgHtml}
+      </div>
+
+      <div style="background:var(--dark3);border-radius:12px;padding:16px;margin-top:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:10px">Admin Notes & Status</div>
+        <textarea id="sellAdminNotes_${r.id}" rows="3"
+          style="width:100%;padding:10px 13px;border-radius:8px;border:1px solid var(--border);
+            font-size:13px;background:var(--dark2);outline:none;resize:vertical;font-family:inherit;color:var(--text)"
+          placeholder="Add notes about this listing…">${escHtml(r.admin_notes || "")}</textarea>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          ${["reviewed", "approved", "rejected"]
+            .map(
+              (s) => `
+            <button onclick="updateSellStatus('${r.id}','${s}')"
+              style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--dark2);
+                font-size:12px;font-weight:700;cursor:pointer;color:var(--text-muted);transition:all 0.2s"
+              onmouseover="this.style.background='var(--gold)';this.style.color='#000'"
+              onmouseout="this.style.background='var(--dark2)';this.style.color='var(--text-muted)'">
+              ${s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("sellModal").classList.remove("hidden");
+}
+
+function closeSellModal() {
+  document.getElementById("sellModal").classList.add("hidden");
+}
+
+async function updateSellStatus(id, status) {
+  const notes = document.getElementById(`sellAdminNotes_${id}`)?.value || "";
+  const { error } = await supabase
+    .from("sell_requests")
+    .update({ review_status: status, admin_notes: notes })
+    .eq("id", id);
+
+  if (error) {
+    showToast("Failed to update: " + error.message, "error");
+    return;
+  }
+
+  const r = allSellRequests.find((x) => x.id === id);
+  if (r) {
+    r.review_status = status;
+    r.admin_notes = notes;
+  }
+  updateSellStats(allSellRequests);
+  updateSellBadge(allSellRequests);
+  filterSellRequests();
+  showToast(`Status updated to "${status}"`);
+  closeSellModal();
+}
+
+async function approveSellRequest(id) {
+  const r = allSellRequests.find((x) => x.id === id);
+  if (!r) return;
+
+  const confirmed = confirm(
+    `Add "${r.title}" to the live property listings?\n\nThis will copy it to the Properties table and mark this request as Approved.`,
+  );
+  if (!confirmed) return;
+
+  const payload = {
+    title: r.title,
+    property_type: r.property_type,
+    status: r.status,
+    price: r.price,
+    location: r.location,
+    sqft: r.sqft,
+    bedrooms: r.bedrooms,
+    bathrooms: r.bathrooms,
+    kitchens: r.kitchens,
+    description: r.description,
+    features_description: r.features_description,
+    property_details: r.property_details,
+    utility_features: r.utility_features,
+    outdoor_features: r.outdoor_features,
+    whats_nearby: r.whats_nearby,
+    amenities: r.amenities,
+    images: r.images,
+    floor_plans: r.floor_plans,
+    agent: {
+      name: r.contact_name,
+      email: r.contact_email,
+      phone: r.contact_phone,
+    },
+  };
+
+  const { error: insertErr } = await supabase
+    .from("properties")
+    .insert([payload]);
+  if (insertErr) {
+    showToast("Failed to add property: " + insertErr.message, "error");
+    return;
+  }
+
+  const { error: updateErr } = await supabase
+    .from("sell_requests")
+    .update({ review_status: "approved" })
+    .eq("id", id);
+  if (updateErr) showToast("Property added but status update failed.", "info");
+  else {
+    r.review_status = "approved";
+    showToast(`✓ "${r.title}" added to live listings!`, "success");
+  }
+
+  updateSellStats(allSellRequests);
+  updateSellBadge(allSellRequests);
+  filterSellRequests();
+  closeSellModal();
 }
 
 // ─── INIT ──────────────────────────────────────────────────────
