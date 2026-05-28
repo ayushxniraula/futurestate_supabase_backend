@@ -44,12 +44,15 @@ function doLogin() {
 }
 
 function checkSession() {
+  // Always start with both screens hidden — avoids flash-of-login on reload
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("portal").classList.add("hidden");
+
   const stored =
     localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
   if (stored) {
     try {
       const s = JSON.parse(stored);
-      // Session valid for 30 days (localStorage) or until tab close (sessionStorage)
       const thirtyDays = 30 * 24 * 60 * 60 * 1000;
       if (s.user === ADMIN_USER && Date.now() - s.ts < thirtyDays) {
         enterPortal();
@@ -57,7 +60,7 @@ function checkSession() {
       }
     } catch (e) {}
   }
-  // Show login
+  // Only show login after session check fails
   document.getElementById("loginScreen").classList.remove("hidden");
 }
 
@@ -112,21 +115,28 @@ function showPage(name, skipReset = false) {
   document
     .querySelectorAll(".nav-item")
     .forEach((n) => n.classList.remove("active"));
-  document.getElementById("page-" + name).classList.remove("hidden");
 
-  if (name === "listings") {
-    document
-      .querySelector("[onclick=\"showPage('listings');return false;\"]")
-      .classList.add("active");
-  } else if (name === "add") {
-    document
-      .querySelector("[onclick=\"showPage('add');return false;\"]")
-      .classList.add("active");
-    if (!skipReset) {
-      resetForm();
-      document.getElementById("formTitle").textContent = "Add New Property";
-      document.getElementById("editingId").value = "";
-    }
+  const page = document.getElementById("page-" + name);
+  if (page) page.classList.remove("hidden");
+
+  const navMap = {
+    listings: "[onclick=\"showPage('listings');return false;\"]",
+    add: "[onclick=\"showPage('add');return false;\"]",
+    contacts: "[onclick=\"showPage('contacts');return false;\"]",
+  };
+  if (navMap[name]) {
+    const el = document.querySelector(navMap[name]);
+    if (el) el.classList.add("active");
+  }
+
+  if (name === "add" && !skipReset) {
+    resetForm();
+    document.getElementById("formTitle").textContent = "Add New Property";
+    document.getElementById("editingId").value = "";
+  }
+
+  if (name === "contacts") {
+    loadContacts();
   }
 }
 
@@ -1188,6 +1198,323 @@ function showFormError(msg) {
   el.textContent = msg;
   el.classList.remove("hidden");
   el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ─── CONTACTS PAGE ─────────────────────────────────────────────
+let allContacts = [];
+let contactSortField = "created_at";
+let contactSortDir = "desc";
+
+const CONTACT_STATUS_LABELS = {
+  new: { label: "New", class: "cs-new" },
+  contacted: { label: "Contacted", class: "cs-contacted" },
+  qualified: { label: "Qualified", class: "cs-qualified" },
+  viewing_scheduled: { label: "Viewing Scheduled", class: "cs-viewing" },
+  negotiating: { label: "Negotiating", class: "cs-negotiating" },
+  closed: { label: "Closed ✓", class: "cs-closed" },
+  lost: { label: "Lost", class: "cs-lost" },
+};
+
+const CONTACT_PRIORITY_LABELS = {
+  low: { label: "Low", class: "cp-low" },
+  normal: { label: "Normal", class: "cp-normal" },
+  high: { label: "High", class: "cp-high" },
+  urgent: { label: "Urgent", class: "cp-urgent" },
+};
+
+async function loadContacts() {
+  try {
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    allContacts = data || [];
+    updateContactStats();
+    renderContacts(allContacts);
+  } catch (err) {
+    showToast("Error loading contacts: " + err.message, "error");
+    document.getElementById("contactsTable").innerHTML =
+      `<tr><td colspan="7" class="empty-state"><div class="empty-icon">⚠</div><p>Could not load contacts.</p></td></tr>`;
+  }
+}
+
+function updateContactStats() {
+  const total = allContacts.length;
+  const newC = allContacts.filter((c) => c.status === "new").length;
+  const contacted = allContacts.filter((c) => c.status === "contacted").length;
+  const inProgress = allContacts.filter((c) =>
+    ["qualified", "viewing_scheduled", "negotiating"].includes(c.status),
+  ).length;
+  const closed = allContacts.filter((c) => c.status === "closed").length;
+
+  document.getElementById("cStatTotal").textContent = total;
+  document.getElementById("cStatNew").textContent = newC;
+  document.getElementById("cStatInProgress").textContent = inProgress;
+  document.getElementById("cStatClosed").textContent = closed;
+}
+
+function filterContacts() {
+  const search = document.getElementById("contactSearch").value.toLowerCase();
+  const status = document.getElementById("contactStatusFilter").value;
+  const priority = document.getElementById("contactPriorityFilter").value;
+  const type = document.getElementById("contactTypeFilter").value;
+
+  let filtered = allContacts.filter((c) => {
+    const matchSearch =
+      !search ||
+      c.name?.toLowerCase().includes(search) ||
+      c.email?.toLowerCase().includes(search) ||
+      c.phone?.toLowerCase().includes(search) ||
+      c.message?.toLowerCase().includes(search) ||
+      c.property_name?.toLowerCase().includes(search);
+    const matchStatus = !status || c.status === status;
+    const matchPriority = !priority || c.priority === priority;
+    const matchType = !type || c.inquiry_type === type;
+    return matchSearch && matchStatus && matchPriority && matchType;
+  });
+
+  // Sort
+  filtered.sort((a, b) => {
+    let va = a[contactSortField] ?? "";
+    let vb = b[contactSortField] ?? "";
+    if (contactSortField === "created_at") {
+      va = new Date(va);
+      vb = new Date(vb);
+    }
+    if (va < vb) return contactSortDir === "asc" ? -1 : 1;
+    if (va > vb) return contactSortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  renderContacts(filtered);
+}
+
+function setContactSort(field) {
+  if (contactSortField === field) {
+    contactSortDir = contactSortDir === "asc" ? "desc" : "asc";
+  } else {
+    contactSortField = field;
+    contactSortDir = "desc";
+  }
+  filterContacts();
+}
+
+function renderContacts(contacts) {
+  const tbody = document.getElementById("contactsTable");
+  document.getElementById("contactCount").textContent =
+    `${contacts.length} lead${contacts.length !== 1 ? "s" : ""}`;
+
+  if (!contacts.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:60px;color:var(--text-muted)">No contacts found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = contacts
+    .map((c) => {
+      const st = CONTACT_STATUS_LABELS[c.status] || {
+        label: c.status,
+        class: "cs-new",
+      };
+      const pr = CONTACT_PRIORITY_LABELS[c.priority] || {
+        label: c.priority,
+        class: "cp-normal",
+      };
+      const date = c.created_at
+        ? new Date(c.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—";
+      const budget =
+        c.budget_min || c.budget_max
+          ? `$${(c.budget_min || 0).toLocaleString()} – $${(c.budget_max || "?").toLocaleString()}`
+          : "—";
+
+      return `
+      <tr class="contact-row-item" onclick="openContactModal('${c.id}')">
+        <td>
+          <div class="contact-name-cell">
+            <div class="contact-avatar">${(c.name || "?").charAt(0).toUpperCase()}</div>
+            <div>
+              <div class="contact-name">${escHtml(c.name)}</div>
+              <div class="contact-email">${escHtml(c.email)}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="contact-type-badge">${escHtml(c.inquiry_type || "—")}</span></td>
+        <td>${escHtml(c.property_name || "—")}</td>
+        <td>${budget}</td>
+        <td><span class="contact-status-badge ${st.class}">${st.label}</span></td>
+        <td><span class="contact-priority-badge ${pr.class}">${pr.label}</span></td>
+        <td class="contact-date">${date}</td>
+        <td onclick="event.stopPropagation()">
+          <select class="contact-status-select" onchange="quickUpdateStatus('${c.id}', this.value)">
+            ${Object.entries(CONTACT_STATUS_LABELS)
+              .map(
+                ([v, s]) =>
+                  `<option value="${v}" ${c.status === v ? "selected" : ""}>${s.label}</option>`,
+              )
+              .join("")}
+          </select>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function quickUpdateStatus(id, newStatus) {
+  try {
+    const { error } = await supabase
+      .from("contacts")
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+    const idx = allContacts.findIndex((c) => c.id === id);
+    if (idx !== -1) allContacts[idx].status = newStatus;
+    updateContactStats();
+    showToast("Status updated", "success");
+    renderContacts(
+      allContacts.filter((c) => {
+        const search = document
+          .getElementById("contactSearch")
+          .value.toLowerCase();
+        const status = document.getElementById("contactStatusFilter").value;
+        const matchSearch =
+          !search ||
+          c.name?.toLowerCase().includes(search) ||
+          c.email?.toLowerCase().includes(search);
+        const matchStatus = !status || c.status === status;
+        return matchSearch && matchStatus;
+      }),
+    );
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+}
+
+// ── Contact detail modal ───────────────────────────────────────
+function openContactModal(id) {
+  const c = allContacts.find((x) => x.id === id);
+  if (!c) return;
+
+  const st = CONTACT_STATUS_LABELS[c.status] || {
+    label: c.status,
+    class: "cs-new",
+  };
+  const pr = CONTACT_PRIORITY_LABELS[c.priority] || {
+    label: c.priority,
+    class: "cp-normal",
+  };
+  const date = c.created_at
+    ? new Date(c.created_at).toLocaleString("en-US")
+    : "—";
+  const budget =
+    c.budget_min || c.budget_max
+      ? `$${Number(c.budget_min || 0).toLocaleString()} – $${Number(c.budget_max || 0).toLocaleString()}`
+      : "Not specified";
+
+  document.getElementById("contactModalContent").innerHTML = `
+    <div class="cmodal-header">
+      <div class="contact-avatar lg">${(c.name || "?").charAt(0).toUpperCase()}</div>
+      <div class="cmodal-title">
+        <h3>${escHtml(c.name)}</h3>
+        <div class="cmodal-sub">${escHtml(c.email)}${c.phone ? ` · ${escHtml(c.phone)}` : ""}</div>
+      </div>
+      <div class="cmodal-badges">
+        <span class="contact-status-badge ${st.class}">${st.label}</span>
+        <span class="contact-priority-badge ${pr.class}">${pr.label}</span>
+      </div>
+    </div>
+
+    <div class="cmodal-grid">
+      <div class="cmodal-section">
+        <h4>Inquiry Details</h4>
+        <div class="cmodal-row"><span>Type</span><strong>${escHtml(c.inquiry_type || "—")}</strong></div>
+        <div class="cmodal-row"><span>Subject</span><strong>${escHtml(c.subject || "—")}</strong></div>
+        <div class="cmodal-row"><span>Property</span><strong>${escHtml(c.property_name || "—")}</strong></div>
+        <div class="cmodal-row"><span>Budget</span><strong>${budget}</strong></div>
+        <div class="cmodal-row"><span>Timeline</span><strong>${escHtml(c.move_timeline || "—")}</strong></div>
+        <div class="cmodal-row"><span>Submitted</span><strong>${date}</strong></div>
+      </div>
+
+      <div class="cmodal-section">
+        <h4>Contact Preferences</h4>
+        <div class="cmodal-row"><span>Preferred Contact</span><strong>${escHtml(c.preferred_contact || "Any")}</strong></div>
+        <div class="cmodal-row"><span>Best Time</span><strong>${escHtml(c.preferred_time || "Anytime")}</strong></div>
+        ${c.whatsapp ? `<div class="cmodal-row"><span>WhatsApp</span><strong>${escHtml(c.whatsapp)}</strong></div>` : ""}
+        <div class="cmodal-row"><span>Source</span><strong>${escHtml(c.source || "website")}</strong></div>
+      </div>
+    </div>
+
+    <div class="cmodal-section cmodal-full">
+      <h4>Message</h4>
+      <p class="cmodal-message">${escHtml(c.message || "—")}</p>
+    </div>
+
+    <div class="cmodal-section cmodal-full">
+      <h4>Update Status & Priority</h4>
+      <div class="cmodal-actions-row">
+        <div class="form-group" style="flex:1">
+          <label>Status</label>
+          <select id="cm_status" onchange="updateContactField('${c.id}', 'status', this.value)">
+            ${Object.entries(CONTACT_STATUS_LABELS)
+              .map(
+                ([v, s]) =>
+                  `<option value="${v}" ${c.status === v ? "selected" : ""}>${s.label}</option>`,
+              )
+              .join("")}
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label>Priority</label>
+          <select id="cm_priority" onchange="updateContactField('${c.id}', 'priority', this.value)">
+            ${Object.entries(CONTACT_PRIORITY_LABELS)
+              .map(
+                ([v, p]) =>
+                  `<option value="${v}" ${c.priority === v ? "selected" : ""}>${p.label}</option>`,
+              )
+              .join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="cmodal-section cmodal-full">
+      <h4>Admin Notes</h4>
+      <textarea id="cm_notes" rows="3" placeholder="Add internal notes…" style="width:100%;background:var(--dark3);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;outline:none;">${escHtml(c.admin_notes || "")}</textarea>
+      <button class="btn-primary" style="margin-top:8px" onclick="saveContactNotes('${c.id}')">Save Notes</button>
+    </div>
+  `;
+
+  document.getElementById("contactModal").classList.remove("hidden");
+}
+
+async function updateContactField(id, field, value) {
+  try {
+    const { error } = await supabase
+      .from("contacts")
+      .update({ [field]: value, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+    const idx = allContacts.findIndex((c) => c.id === id);
+    if (idx !== -1) allContacts[idx][field] = value;
+    updateContactStats();
+    showToast("Updated", "success");
+  } catch (err) {
+    showToast("Error: " + err.message, "error");
+  }
+}
+
+async function saveContactNotes(id) {
+  const notes = document.getElementById("cm_notes").value;
+  await updateContactField(id, "admin_notes", notes);
+}
+
+function closeContactModal() {
+  document.getElementById("contactModal").classList.add("hidden");
+  loadContacts();
 }
 
 // ─── INIT ──────────────────────────────────────────────────────

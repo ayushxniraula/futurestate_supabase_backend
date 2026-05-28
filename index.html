@@ -108,6 +108,17 @@
           >
             <span class="nav-icon">＋</span> Add Property
           </a>
+          <a
+            href="#"
+            class="nav-item"
+            onclick="
+              showPage('contacts');
+              return false;
+            "
+          >
+            <span class="nav-icon">✉</span> Contacts
+            <span id="contactNewBadge" class="nav-badge hidden">0</span>
+          </a>
         </nav>
         <div class="sidebar-footer">
           <div class="admin-badge">
@@ -1015,10 +1026,155 @@
           </div>
           <div id="viewContent"></div>
         </div>
+        <!-- CONTACTS PAGE -->
+        <div id="page-contacts" class="page hidden">
+          <div class="page-header">
+            <div>
+              <h1>Contact Leads</h1>
+              <p id="contactCount">Loading…</p>
+            </div>
+            <div class="header-actions">
+              <button
+                class="btn-secondary"
+                onclick="loadContacts()"
+                title="Refresh"
+              >
+                ↺ Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-bar">
+            <div class="stat-card gold">
+              <div class="stat-label">Total Leads</div>
+              <div class="stat-value" id="cStatTotal">—</div>
+              <div class="stat-sub">all contacts</div>
+              <div class="stat-icon">✉</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">New</div>
+              <div class="stat-value" id="cStatNew">—</div>
+              <div class="stat-sub">awaiting response</div>
+              <div class="stat-icon">🔔</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">In Progress</div>
+              <div class="stat-value" id="cStatInProgress">—</div>
+              <div class="stat-sub">qualified + viewing</div>
+              <div class="stat-icon">⏳</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Closed</div>
+              <div class="stat-value" id="cStatClosed">—</div>
+              <div class="stat-sub">deals done</div>
+              <div class="stat-icon">✓</div>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <div class="search-wrap" style="min-width: 260px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                id="contactSearch"
+                placeholder="Search name, email, property…"
+                oninput="filterContacts()"
+              />
+            </div>
+            <select id="contactStatusFilter" onchange="filterContacts()">
+              <option value="">All Status</option>
+              <option value="new">New</option>
+              <option value="contacted">Contacted</option>
+              <option value="qualified">Qualified</option>
+              <option value="viewing_scheduled">Viewing Scheduled</option>
+              <option value="negotiating">Negotiating</option>
+              <option value="closed">Closed</option>
+              <option value="lost">Lost</option>
+            </select>
+            <select id="contactPriorityFilter" onchange="filterContacts()">
+              <option value="">All Priority</option>
+              <option value="urgent">Urgent</option>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+            <select id="contactTypeFilter" onchange="filterContacts()">
+              <option value="">All Types</option>
+              <option value="buying">Buying</option>
+              <option value="renting">Renting</option>
+              <option value="selling">Selling</option>
+              <option value="valuation">Valuation</option>
+              <option value="investment">Investment</option>
+              <option value="viewing">Viewing</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+
+          <!-- Table -->
+          <div class="contacts-table-wrap">
+            <table class="contacts-table">
+              <thead>
+                <tr>
+                  <th onclick="setContactSort('name')" class="sortable">
+                    Contact ↕
+                  </th>
+                  <th>Type</th>
+                  <th>Property</th>
+                  <th onclick="setContactSort('budget_max')" class="sortable">
+                    Budget ↕
+                  </th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th onclick="setContactSort('created_at')" class="sortable">
+                    Date ↕
+                  </th>
+                  <th>Quick Update</th>
+                </tr>
+              </thead>
+              <tbody id="contactsTable">
+                <tr>
+                  <td
+                    colspan="8"
+                    style="
+                      text-align: center;
+                      padding: 60px;
+                      color: var(--text-muted);
+                    "
+                  >
+                    <div class="spinner" style="margin: 0 auto 12px"></div>
+                    Loading contacts…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </main>
     </div>
 
-    <!-- DELETE MODAL -->
+    <!-- CONTACT DETAIL MODAL -->
+    <div
+      id="contactModal"
+      class="modal-overlay hidden"
+      onclick="if (event.target === this) closeContactModal();"
+    >
+      <div class="modal contact-modal">
+        <div class="modal-close-btn" onclick="closeContactModal()">✕</div>
+        <div id="contactModalContent"></div>
+      </div>
+    </div>
     <div id="deleteModal" class="modal-overlay hidden">
       <div class="modal">
         <h3>Delete Property?</h3>

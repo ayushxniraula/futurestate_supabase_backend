@@ -1518,3 +1518,328 @@ body {
   );
   border-color: var(--gold-border);
 }
+
+/* ─── CONTACTS PAGE ──────────────────────────────── */
+.contacts-table-wrap {
+  overflow-x: auto;
+  background: var(--dark2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.contacts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.contacts-table thead th {
+  background: var(--dark3);
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.contacts-table thead th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.contacts-table thead th.sortable:hover {
+  color: var(--gold-light);
+}
+
+.contact-row-item {
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--border);
+}
+.contact-row-item:last-child {
+  border-bottom: none;
+}
+.contact-row-item:hover {
+  background: var(--dark3);
+}
+.contacts-table td {
+  padding: 12px 16px;
+  vertical-align: middle;
+}
+
+.contact-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.contact-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  color: var(--dark);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.contact-avatar.lg {
+  width: 52px;
+  height: 52px;
+  font-size: 20px;
+  border-radius: 12px;
+}
+.contact-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+.contact-email {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.contact-type-badge {
+  padding: 3px 10px;
+  background: var(--dark3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.contact-date {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Status badges */
+.contact-status-badge {
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  display: inline-block;
+}
+.cs-new {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--info);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+.cs-contacted {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.cs-qualified {
+  background: rgba(167, 139, 250, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+.cs-viewing {
+  background: rgba(201, 168, 76, 0.15);
+  color: var(--gold-light);
+  border: 1px solid var(--gold-border);
+}
+.cs-negotiating {
+  background: rgba(251, 146, 60, 0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.3);
+}
+.cs-closed {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+.cs-lost {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+/* Priority badges */
+.contact-priority-badge {
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  display: inline-block;
+}
+.cp-low {
+  background: var(--dark3);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+.cp-normal {
+  background: var(--dark3);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.cp-high {
+  background: rgba(251, 191, 36, 0.12);
+  color: var(--warning);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.cp-urgent {
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--error);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.contact-status-select {
+  background: var(--dark3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-family: "DM Sans", sans-serif;
+  cursor: pointer;
+  outline: none;
+  max-width: 150px;
+  transition: border-color 0.15s;
+}
+.contact-status-select:hover {
+  border-color: var(--gold-border);
+}
+
+/* Nav badge */
+.nav-badge {
+  margin-left: auto;
+  background: var(--gold);
+  color: var(--dark);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 20px;
+  min-width: 20px;
+  text-align: center;
+}
+
+/* ─── CONTACT MODAL ──────────────────────────────── */
+.contact-modal {
+  width: 720px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+.modal-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--dark3);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: all 0.15s;
+}
+.modal-close-btn:hover {
+  background: var(--mid);
+  color: var(--text);
+}
+
+.cmodal-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.cmodal-title h3 {
+  font-family: "Instrument Serif", serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+.cmodal-title {
+  flex: 1;
+}
+.cmodal-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.cmodal-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.cmodal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 600px) {
+  .cmodal-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cmodal-section {
+  background: var(--dark3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.cmodal-section h4 {
+  font-family: "Instrument Serif", serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+.cmodal-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.cmodal-row:last-child {
+  border-bottom: none;
+}
+.cmodal-row span {
+  color: var(--text-muted);
+}
+.cmodal-row strong {
+  color: var(--text);
+  text-align: right;
+  max-width: 60%;
+}
+.cmodal-message {
+  color: var(--text-muted);
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.cmodal-full {
+  grid-column: 1 / -1;
+}
+.cmodal-actions-row {
+  display: flex;
+  gap: 14px;
+}
