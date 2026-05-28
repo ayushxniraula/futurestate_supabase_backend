@@ -1,6 +1,5 @@
 // ============================================================
 //  EstateAdmin — Supabase Config
-//  Replace with your actual credentials
 // ============================================================
 
 const SUPABASE_URL = "https://wzttfewbiiakxkmgzfre.supabase.co";

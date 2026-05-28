@@ -1,47 +1,112 @@
 // ============================================================
-//  ESTATE ADMIN — Main Application Logic
+//  ESTATE ADMIN — Application Logic (v2)
 // ============================================================
 
-// Hard-coded credentials
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "admin@123";
+const SESSION_KEY = "ea_session";
 
 // State
 let allProperties = [];
-let pendingImages = []; // new property image File objects
-let pendingFloorPlans = []; // new floor plan File objects
+let currentView = "grid"; // 'grid' | 'list'
+let pendingImages = [];
+let pendingFloorPlans = [];
 let deleteTargetId = null;
-let removedExistingImages = []; // property image URLs to delete from storage
-let removedExistingFloorPlans = []; // floor plan URLs to delete from storage
+let removedExistingImages = [];
+let removedExistingFloorPlans = [];
 
 const MAX_IMAGES = 5;
 const MAX_FLOOR_PLANS = 3;
 
-// ─── AUTH ────────────────────────────────────────────────────
+// ─── AUTH ─────────────────────────────────────────────────────
 function doLogin() {
   const u = document.getElementById("loginUser").value.trim();
   const p = document.getElementById("loginPass").value.trim();
+  const remember = document.getElementById("rememberMe").checked;
+
   if (u === ADMIN_USER && p === ADMIN_PASS) {
-    document.getElementById("loginScreen").classList.add("hidden");
-    document.getElementById("portal").classList.remove("hidden");
-    loadListings();
+    if (remember) {
+      localStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ user: u, ts: Date.now() }),
+      );
+    } else {
+      sessionStorage.setItem(
+        SESSION_KEY,
+        JSON.stringify({ user: u, ts: Date.now() }),
+      );
+    }
+    enterPortal();
   } else {
     document.getElementById("loginError").classList.remove("hidden");
+    document.getElementById("loginPass").value = "";
   }
 }
 
-document.getElementById("loginPass").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") doLogin();
-});
+function checkSession() {
+  const stored =
+    localStorage.getItem(SESSION_KEY) || sessionStorage.getItem(SESSION_KEY);
+  if (stored) {
+    try {
+      const s = JSON.parse(stored);
+      // Session valid for 30 days (localStorage) or until tab close (sessionStorage)
+      const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+      if (s.user === ADMIN_USER && Date.now() - s.ts < thirtyDays) {
+        enterPortal();
+        return;
+      }
+    } catch (e) {}
+  }
+  // Show login
+  document.getElementById("loginScreen").classList.remove("hidden");
+}
+
+function enterPortal() {
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("portal").classList.remove("hidden");
+  loadListings();
+}
 
 function doLogout() {
+  localStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(SESSION_KEY);
   document.getElementById("portal").classList.add("hidden");
   document.getElementById("loginScreen").classList.remove("hidden");
   document.getElementById("loginUser").value = "";
   document.getElementById("loginPass").value = "";
+  document.getElementById("loginError").classList.add("hidden");
 }
 
-// ─── PAGE NAVIGATION ─────────────────────────────────────────
+// Enter on password field
+document.getElementById("loginPass").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") doLogin();
+});
+document.getElementById("loginUser").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("loginPass").focus();
+});
+
+// ─── KEYBOARD SHORTCUTS ───────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Escape closes modals
+  if (e.key === "Escape") {
+    closeDeleteModal();
+    closeLightbox();
+  }
+});
+
+// ─── VIEW TOGGLE ──────────────────────────────────────────────
+function setView(mode) {
+  currentView = mode;
+  document
+    .getElementById("gridViewBtn")
+    .classList.toggle("active", mode === "grid");
+  document
+    .getElementById("listViewBtn")
+    .classList.toggle("active", mode === "list");
+  filterListings();
+}
+
+// ─── PAGE NAVIGATION ──────────────────────────────────────────
 function showPage(name, skipReset = false) {
   document.querySelectorAll(".page").forEach((p) => p.classList.add("hidden"));
   document
@@ -51,11 +116,11 @@ function showPage(name, skipReset = false) {
 
   if (name === "listings") {
     document
-      .querySelector("[onclick=\"showPage('listings')\"]")
+      .querySelector("[onclick=\"showPage('listings');return false;\"]")
       .classList.add("active");
   } else if (name === "add") {
     document
-      .querySelector("[onclick=\"showPage('add')\"]")
+      .querySelector("[onclick=\"showPage('add');return false;\"]")
       .classList.add("active");
     if (!skipReset) {
       resetForm();
@@ -65,7 +130,7 @@ function showPage(name, skipReset = false) {
   }
 }
 
-// ─── LISTINGS ────────────────────────────────────────────────
+// ─── LISTINGS ─────────────────────────────────────────────────
 async function loadListings() {
   try {
     const { data, error } = await supabase
@@ -75,78 +140,46 @@ async function loadListings() {
 
     if (error) throw error;
     allProperties = data || [];
-    renderListings(allProperties);
+    updateStats();
+    filterListings();
   } catch (err) {
     showToast("Error loading listings: " + err.message, "error");
     document.getElementById("propertiesGrid").innerHTML =
-      `<div class="empty-state"><p>⚠ Could not load properties. Check your Supabase config.</p></div>`;
+      `<div class="empty-state"><div class="empty-icon">⚠</div><p>Could not load properties. Check your Supabase config.</p></div>`;
   }
 }
 
-function renderListings(properties) {
-  const grid = document.getElementById("propertiesGrid");
-  document.getElementById("listingCount").textContent =
-    `${properties.length} propert${properties.length !== 1 ? "ies" : "y"} found`;
+function updateStats() {
+  const total = allProperties.length;
+  const forSale = allProperties.filter((p) => p.status === "For Sale").length;
+  const forRent = allProperties.filter((p) => p.status === "For Rent").length;
+  const totalValue = allProperties
+    .filter((p) => p.status === "For Sale" || p.status === "For Rent")
+    .reduce((sum, p) => sum + (Number(p.price) || 0), 0);
 
-  if (!properties.length) {
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🏘</div><p>No properties found</p><button class="btn-primary" onclick="showPage('add')">Add your first property</button></div>`;
-    return;
+  document.getElementById("statTotal").textContent = total;
+  document.getElementById("statSale").textContent = forSale;
+  document.getElementById("statRent").textContent = forRent;
+
+  // Format value
+  let valStr;
+  if (totalValue >= 1_000_000) {
+    valStr = "$" + (totalValue / 1_000_000).toFixed(1) + "M";
+  } else if (totalValue >= 1_000) {
+    valStr = "$" + (totalValue / 1_000).toFixed(0) + "K";
+  } else {
+    valStr = "$" + totalValue;
   }
-
-  grid.innerHTML = properties
-    .map((p) => {
-      const images = p.images || [];
-      const thumb = images.length ? images[0] : null;
-      const statusClass =
-        p.status === "For Sale"
-          ? "status-sale"
-          : p.status === "For Rent"
-            ? "status-rent"
-            : "status-other";
-      const price =
-        p.status === "For Rent"
-          ? `$${Number(p.price).toLocaleString()} / mo`
-          : `$${Number(p.price).toLocaleString()}`;
-
-      return `
-    <div class="property-card" onclick="viewProperty('${p.id}')">
-      <div class="card-image">
-        ${
-          thumb
-            ? `<img src="${thumb}" alt="${p.title}" loading="lazy" />`
-            : `<div class="no-image">🏠</div>`
-        }
-        <span class="status-badge ${statusClass}">${p.status || "N/A"}</span>
-        <div class="card-actions" onclick="event.stopPropagation()">
-          <button class="card-btn edit" onclick="editProperty('${p.id}')">✏</button>
-          <button class="card-btn del" onclick="openDeleteModal('${p.id}')">🗑</button>
-        </div>
-      </div>
-      <div class="card-body">
-        <h3 class="card-title">${p.title}</h3>
-        <p class="card-location">📍 ${p.location || "Location not set"}</p>
-        <div class="card-specs">
-          ${p.sqft ? `<span>⬜ ${p.sqft} sqft</span>` : ""}
-          ${p.bedrooms ? `<span>🛏 ${String(p.bedrooms).padStart(2, "0")} bed</span>` : ""}
-          ${p.bathrooms ? `<span>🚿 ${String(p.bathrooms).padStart(2, "0")} bath</span>` : ""}
-          ${p.kitchens ? `<span>🍳 ${String(p.kitchens).padStart(2, "0")} kit</span>` : ""}
-        </div>
-        <div class="card-footer">
-          <span class="card-price">${price}</span>
-          <span class="card-type">${p.property_type || ""}</span>
-        </div>
-      </div>
-    </div>`;
-    })
-    .join("");
+  document.getElementById("statValue").textContent = valStr;
 }
 
 function filterListings() {
   const search = document.getElementById("searchInput").value.toLowerCase();
   const status = document.getElementById("statusFilter").value;
   const type = document.getElementById("typeFilter").value;
+  const sort = document.getElementById("sortFilter").value;
 
-  const filtered = allProperties.filter((p) => {
+  let filtered = allProperties.filter((p) => {
     const matchSearch =
       !search ||
       p.title?.toLowerCase().includes(search) ||
@@ -155,7 +188,137 @@ function filterListings() {
     const matchType = !type || p.property_type === type;
     return matchSearch && matchStatus && matchType;
   });
+
+  // Sort
+  filtered = filtered.slice().sort((a, b) => {
+    switch (sort) {
+      case "oldest":
+        return new Date(a.created_at) - new Date(b.created_at);
+      case "price_asc":
+        return (a.price || 0) - (b.price || 0);
+      case "price_desc":
+        return (b.price || 0) - (a.price || 0);
+      default:
+        return new Date(b.created_at) - new Date(a.created_at); // newest
+    }
+  });
+
   renderListings(filtered);
+}
+
+function renderListings(properties) {
+  const grid = document.getElementById("propertiesGrid");
+  document.getElementById("listingCount").textContent =
+    `${properties.length} propert${properties.length !== 1 ? "ies" : "y"} found`;
+
+  // Update container class
+  grid.className =
+    currentView === "list" ? "properties-list" : "properties-grid";
+
+  if (!properties.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🏘</div><p>No properties found</p><button class="btn-primary" style="margin-top:8px" onclick="showPage('add')">Add your first property</button></div>`;
+    return;
+  }
+
+  if (currentView === "list") {
+    grid.innerHTML = properties.map((p) => renderListItem(p)).join("");
+  } else {
+    grid.innerHTML = properties.map((p) => renderCard(p)).join("");
+  }
+}
+
+function renderCard(p) {
+  const thumb = (p.images || [])[0];
+  const statusClass = getStatusClass(p.status);
+  const price = formatPrice(p);
+
+  return `
+    <div class="property-card" onclick="viewProperty('${p.id}')">
+      <div class="card-image">
+        ${thumb ? `<img src="${thumb}" alt="${escHtml(p.title)}" loading="lazy" />` : `<div class="no-image">🏠</div>`}
+        <span class="status-badge ${statusClass}">${p.status || "N/A"}</span>
+        <div class="card-actions" onclick="event.stopPropagation()">
+          <button class="card-btn copy" onclick="copyPropertyId('${p.id}')" title="Copy ID">⎘</button>
+          <button class="card-btn edit" onclick="editProperty('${p.id}')" title="Edit">✏</button>
+          <button class="card-btn del" onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">${escHtml(p.title)}</h3>
+        <p class="card-location">📍 ${escHtml(p.location || "Location not set")}</p>
+        <div class="card-specs">
+          ${p.sqft ? `<span>⬜ ${p.sqft.toLocaleString()} sqft</span>` : ""}
+          ${p.bedrooms ? `<span>🛏 ${String(p.bedrooms).padStart(2, "0")}</span>` : ""}
+          ${p.bathrooms ? `<span>🚿 ${String(p.bathrooms).padStart(2, "0")}</span>` : ""}
+          ${p.kitchens ? `<span>🍳 ${String(p.kitchens).padStart(2, "0")}</span>` : ""}
+        </div>
+        <div class="card-footer">
+          <span class="card-price">${price}</span>
+          <span class="card-type">${escHtml(p.property_type || "")}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderListItem(p) {
+  const thumb = (p.images || [])[0];
+  const statusClass = getStatusClass(p.status);
+  const price = formatPrice(p);
+
+  return `
+    <div class="property-list-item" onclick="viewProperty('${p.id}')">
+      <div class="list-thumb">
+        ${thumb ? `<img src="${thumb}" alt="" />` : "🏠"}
+      </div>
+      <div class="list-info">
+        <div class="list-title">${escHtml(p.title)}</div>
+        <div class="list-location">📍 ${escHtml(p.location || "Location not set")}</div>
+        <div class="list-specs">
+          ${p.sqft ? `<span>⬜ ${p.sqft.toLocaleString()} sqft</span>` : ""}
+          ${p.bedrooms ? `<span>🛏 ${p.bedrooms} bed</span>` : ""}
+          ${p.bathrooms ? `<span>🚿 ${p.bathrooms} bath</span>` : ""}
+        </div>
+      </div>
+      <div class="list-status"><span class="status-badge ${statusClass}">${p.status || "N/A"}</span></div>
+      <div class="list-price">${price}</div>
+      <div class="list-actions" onclick="event.stopPropagation()">
+        <button class="card-btn edit" onclick="editProperty('${p.id}')" title="Edit">✏</button>
+        <button class="card-btn del" onclick="openDeleteModal('${p.id}')" title="Delete">🗑</button>
+      </div>
+    </div>`;
+}
+
+function getStatusClass(status) {
+  const map = {
+    "For Sale": "status-sale",
+    "For Rent": "status-rent",
+    Sold: "status-sold",
+    Rented: "status-rented",
+  };
+  return map[status] || "status-other";
+}
+
+function formatPrice(p) {
+  const n = Number(p.price).toLocaleString();
+  return p.status === "For Rent" ? `$${n}/mo` : `$${n}`;
+}
+
+function escHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function copyPropertyId(id) {
+  try {
+    await navigator.clipboard.writeText(id);
+    showToast("Property ID copied to clipboard", "info");
+  } catch {
+    showToast("Could not copy: " + id, "info");
+  }
 }
 
 // ─── FORM RESET ───────────────────────────────────────────────
@@ -173,7 +336,6 @@ function resetForm() {
     "f_bedrooms",
     "f_bathrooms",
     "f_kitchens",
-    // property details
     "pd_bedrooms",
     "pd_bathrooms",
     "pd_furnishing",
@@ -186,7 +348,6 @@ function resetForm() {
     "pd_status",
     "pd_total_floors",
     "pd_lot_size",
-    // utility features
     "uf_heating",
     "uf_ac",
     "uf_intercom",
@@ -199,7 +360,6 @@ function resetForm() {
     "uf_solar",
     "uf_smart_home",
     "uf_generator",
-    // outdoor features
     "of_garage",
     "of_parking",
     "of_garden",
@@ -212,7 +372,6 @@ function resetForm() {
     "of_storage",
     "of_terrace",
     "of_sports_court",
-    // nearby
     "nb_school",
     "nb_grocery",
     "nb_metro",
@@ -228,30 +387,28 @@ function resetForm() {
     "nb_park",
     "nb_pharmacy",
     "nb_airport",
-    // (no agent fields)
+    "ag_name",
+    "ag_title",
+    "ag_email",
+    "ag_phone",
+    "ag_location",
   ];
-
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
-
-  // Reset checkboxes
   document
     .querySelectorAll('.amenities-grid input[type="checkbox"]')
     .forEach((cb) => (cb.checked = false));
-
   pendingImages = [];
   pendingFloorPlans = [];
   removedExistingImages = [];
   removedExistingFloorPlans = [];
-
   document.getElementById("imagePreviewGrid").innerHTML = "";
   document.getElementById("existingImages").innerHTML = "";
   document.getElementById("floorPreviewGrid").innerHTML = "";
   document.getElementById("existingFloorPlans").innerHTML = "";
   document.getElementById("formError").classList.add("hidden");
-
   updateImageCountBadge();
   updateFloorPlanCountBadge();
 }
@@ -265,7 +422,6 @@ function updateImageCountBadge() {
   document.getElementById("imgCountBadge").textContent =
     `${total} / ${MAX_IMAGES}`;
 }
-
 function updateFloorPlanCountBadge() {
   const existing = document.querySelectorAll(
     "#existingFloorPlans .preview-thumb",
@@ -275,28 +431,24 @@ function updateFloorPlanCountBadge() {
     `${total} / ${MAX_FLOOR_PLANS}`;
 }
 
-// ─── PROPERTY IMAGE HANDLING ──────────────────────────────────
+// ─── IMAGE HANDLING ───────────────────────────────────────────
 function handleImageSelect(e) {
   const files = Array.from(e.target.files);
   const existingCount = document.querySelectorAll(
     "#existingImages .preview-thumb",
   ).length;
   const remaining = MAX_IMAGES - existingCount - pendingImages.length;
-
   if (remaining <= 0) {
-    showToast(`Maximum ${MAX_IMAGES} images allowed per property.`, "error");
+    showToast(`Maximum ${MAX_IMAGES} images allowed.`, "error");
     e.target.value = "";
     return;
   }
-
   const allowed = files.slice(0, remaining);
-  if (files.length > remaining) {
+  if (files.length > remaining)
     showToast(
       `Only ${remaining} more image(s) allowed. ${files.length - remaining} skipped.`,
       "info",
     );
-  }
-
   allowed.forEach((file) => {
     pendingImages.push(file);
     const idx = pendingImages.length - 1;
@@ -308,28 +460,20 @@ function handleImageSelect(e) {
   e.target.value = "";
 }
 
-// ─── FLOOR PLAN HANDLING ──────────────────────────────────────
 function handleFloorPlanSelect(e) {
   const files = Array.from(e.target.files);
   const existingCount = document.querySelectorAll(
     "#existingFloorPlans .preview-thumb",
   ).length;
   const remaining = MAX_FLOOR_PLANS - existingCount - pendingFloorPlans.length;
-
   if (remaining <= 0) {
     showToast(`Maximum ${MAX_FLOOR_PLANS} floor plans allowed.`, "error");
     e.target.value = "";
     return;
   }
-
   const allowed = files.slice(0, remaining);
-  if (files.length > remaining) {
-    showToast(
-      `Only ${remaining} more floor plan(s) allowed. ${files.length - remaining} skipped.`,
-      "info",
-    );
-  }
-
+  if (files.length > remaining)
+    showToast(`Only ${remaining} more floor plan(s) allowed.`, "info");
   allowed.forEach((file) => {
     pendingFloorPlans.push(file);
     const idx = pendingFloorPlans.length - 1;
@@ -352,10 +496,7 @@ function addImagePreview(src, idx, type, gridId, kind) {
   const wrapper = document.createElement("div");
   wrapper.className = "preview-thumb";
   wrapper.id = `prev-${kind}-${type}-${idx}`;
-  wrapper.innerHTML = `
-    <img src="${src}" alt="preview" />
-    <button class="remove-img" onclick="removePendingItem('${kind}', ${idx})">✕</button>
-  `;
+  wrapper.innerHTML = `<img src="${src}" alt="preview" /><button class="remove-img" onclick="removePendingItem('${kind}', ${idx})">✕</button>`;
   grid.appendChild(wrapper);
   kind === "image" ? updateImageCountBadge() : updateFloorPlanCountBadge();
 }
@@ -363,7 +504,6 @@ function addImagePreview(src, idx, type, gridId, kind) {
 function removePendingItem(kind, idx) {
   if (kind === "image") {
     pendingImages.splice(idx, 1);
-    // Re-render all pending image previews
     document.getElementById("imagePreviewGrid").innerHTML = "";
     pendingImages.forEach((file, i) => {
       const reader = new FileReader();
@@ -412,13 +552,10 @@ async function uploadImage(file, folder) {
   const { data, error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filename, file, { cacheControl: "3600", upsert: false });
-
   if (error) throw error;
-
   const { data: urlData } = supabase.storage
     .from(STORAGE_BUCKET)
     .getPublicUrl(filename);
-
   return urlData.publicUrl;
 }
 
@@ -427,11 +564,11 @@ async function deleteImageFromStorage(url) {
     const path = url.split(`/${STORAGE_BUCKET}/`)[1];
     if (path) await supabase.storage.from(STORAGE_BUCKET).remove([path]);
   } catch (e) {
-    console.warn("Could not delete image from storage:", e);
+    console.warn("Could not delete image:", e);
   }
 }
 
-// ─── COLLECT FORM DATA ────────────────────────────────────────
+// ─── FORM DATA ────────────────────────────────────────────────
 function getVal(id) {
   const el = document.getElementById(id);
   return el ? el.value.trim() : "";
@@ -458,7 +595,6 @@ function collectFormData() {
     am_gym: "Gym / Fitness",
     am_solar: "Solar Panels",
   };
-
   const amenities = [];
   Object.entries(amenityMap).forEach(([id, label]) => {
     if (document.getElementById(id)?.checked) amenities.push(label);
@@ -477,7 +613,6 @@ function collectFormData() {
     bedrooms: parseInt(getVal("f_bedrooms")) || null,
     bathrooms: parseInt(getVal("f_bathrooms")) || null,
     kitchens: parseInt(getVal("f_kitchens")) || null,
-
     property_details: {
       bedrooms: getVal("pd_bedrooms"),
       bathrooms: getVal("pd_bathrooms"),
@@ -492,7 +627,6 @@ function collectFormData() {
       total_floors: getVal("pd_total_floors"),
       lot_size: getVal("pd_lot_size"),
     },
-
     utility_features: {
       heating: getVal("uf_heating"),
       ac: getVal("uf_ac"),
@@ -507,7 +641,6 @@ function collectFormData() {
       smart_home: getVal("uf_smart_home"),
       generator: getVal("uf_generator"),
     },
-
     outdoor_features: {
       garage: getVal("of_garage"),
       parking: getVal("of_parking"),
@@ -522,9 +655,7 @@ function collectFormData() {
       terrace: getVal("of_terrace"),
       sports_court: getVal("of_sports_court"),
     },
-
     amenities,
-
     whats_nearby: {
       school: getVal("nb_school"),
       grocery: getVal("nb_grocery"),
@@ -542,13 +673,19 @@ function collectFormData() {
       pharmacy: getVal("nb_pharmacy"),
       airport: getVal("nb_airport"),
     },
+    agent: {
+      name: getVal("ag_name"),
+      title: getVal("ag_title"),
+      email: getVal("ag_email"),
+      phone: getVal("ag_phone"),
+      location: getVal("ag_location"),
+    },
   };
 }
 
-// ─── SAVE PROPERTY ────────────────────────────────────────────
+// ─── SAVE ─────────────────────────────────────────────────────
 async function saveProperty() {
   const data = collectFormData();
-
   if (!data.title) {
     showFormError("Property name is required.");
     return;
@@ -561,36 +698,29 @@ async function saveProperty() {
   const btn = document.getElementById("saveBtn");
   const btnText = document.getElementById("saveBtnText");
   btn.disabled = true;
-  btnText.textContent = "Saving...";
+  btnText.textContent = "Saving…";
 
   try {
     const editId = document.getElementById("editingId").value;
     let newImageUrls = [];
     let newFloorPlanUrls = [];
 
-    // Upload new property images
     if (pendingImages.length > 0) {
-      showToast("Uploading images...", "info");
-      for (const file of pendingImages) {
+      showToast("Uploading images…", "info");
+      for (const file of pendingImages)
         newImageUrls.push(await uploadImage(file, "listings"));
-      }
     }
-
-    // Upload new floor plans
     if (pendingFloorPlans.length > 0) {
-      showToast("Uploading floor plans...", "info");
-      for (const file of pendingFloorPlans) {
+      showToast("Uploading floor plans…", "info");
+      for (const file of pendingFloorPlans)
         newFloorPlanUrls.push(await uploadImage(file, "floorplans"));
-      }
     }
 
-    // Delete removed images from storage
     for (const url of removedExistingImages) await deleteImageFromStorage(url);
     for (const url of removedExistingFloorPlans)
       await deleteImageFromStorage(url);
 
     if (editId) {
-      // EDIT — deep merge: start from existing record, overlay only non-empty form values
       const existing = allProperties.find((p) => p.id === editId);
       const keptImages = (existing?.images || []).filter(
         (u) => !removedExistingImages.includes(u),
@@ -599,7 +729,6 @@ async function saveProperty() {
         (u) => !removedExistingFloorPlans.includes(u),
       );
 
-      // Helper: merge two objects, keeping existing value when new value is empty/null/undefined
       const mergeObj = (existing = {}, incoming = {}) => {
         const result = { ...existing };
         Object.entries(incoming).forEach(([k, v]) => {
@@ -608,9 +737,8 @@ async function saveProperty() {
         return result;
       };
 
-      // Build the patch — scalar fields
       const patch = {};
-      const scalarKeys = [
+      [
         "title",
         "property_type",
         "status",
@@ -623,14 +751,11 @@ async function saveProperty() {
         "bedrooms",
         "bathrooms",
         "kitchens",
-      ];
-      scalarKeys.forEach((k) => {
+      ].forEach((k) => {
         const v = data[k];
-        // for numbers, 0 is falsy but valid; use null check
         if (v !== null && v !== undefined && v !== "") patch[k] = v;
       });
 
-      // Deep-merge JSONB blobs
       patch.property_details = mergeObj(
         existing?.property_details,
         data.property_details,
@@ -644,12 +769,8 @@ async function saveProperty() {
         data.outdoor_features,
       );
       patch.whats_nearby = mergeObj(existing?.whats_nearby, data.whats_nearby);
-
-      // Amenities: only update if at least one checkbox was touched (array length > 0 OR user cleared all)
-      // We always write amenities since checkboxes are always visible and reflect user intent
+      patch.agent = mergeObj(existing?.agent, data.agent);
       patch.amenities = data.amenities;
-
-      // Images
       patch.images = [...keptImages, ...newImageUrls];
       patch.floor_plans = [...keptFloors, ...newFloorPlanUrls];
       patch.floor_plan = patch.floor_plans[0] || existing?.floor_plan || null;
@@ -662,12 +783,10 @@ async function saveProperty() {
       if (error) throw error;
       showToast("Property updated successfully!", "success");
     } else {
-      // ADD
       data.images = newImageUrls;
       data.floor_plans = newFloorPlanUrls;
       data.floor_plan = newFloorPlanUrls[0] || null;
       data.created_at = new Date().toISOString();
-
       const { error } = await supabase.from("properties").insert([data]);
       if (error) throw error;
       showToast("Property added successfully!", "success");
@@ -684,7 +803,7 @@ async function saveProperty() {
   }
 }
 
-// ─── EDIT PROPERTY ────────────────────────────────────────────
+// ─── EDIT ─────────────────────────────────────────────────────
 function editProperty(id) {
   const p = allProperties.find((x) => x.id === id);
   if (!p) return;
@@ -697,7 +816,6 @@ function editProperty(id) {
     if (el && val !== undefined && val !== null) el.value = val;
   };
 
-  // Basic
   setVal("f_title", p.title);
   setVal("f_type", p.property_type);
   setVal("f_status", p.status);
@@ -711,7 +829,6 @@ function editProperty(id) {
   setVal("f_bathrooms", p.bathrooms);
   setVal("f_kitchens", p.kitchens);
 
-  // Property details
   const pd = p.property_details || {};
   setVal("pd_bedrooms", pd.bedrooms);
   setVal("pd_bathrooms", pd.bathrooms);
@@ -726,7 +843,6 @@ function editProperty(id) {
   setVal("pd_total_floors", pd.total_floors);
   setVal("pd_lot_size", pd.lot_size);
 
-  // Utility
   const uf = p.utility_features || {};
   setVal("uf_heating", uf.heating);
   setVal("uf_ac", uf.ac);
@@ -741,7 +857,6 @@ function editProperty(id) {
   setVal("uf_smart_home", uf.smart_home);
   setVal("uf_generator", uf.generator);
 
-  // Outdoor
   const of_ = p.outdoor_features || {};
   setVal("of_garage", of_.garage);
   setVal("of_parking", of_.parking);
@@ -756,7 +871,6 @@ function editProperty(id) {
   setVal("of_terrace", of_.terrace);
   setVal("of_sports_court", of_.sports_court);
 
-  // Amenities
   const amMapReverse = {
     "A/C & Heating": "am_ac_heating",
     Garages: "am_garages",
@@ -782,7 +896,6 @@ function editProperty(id) {
     if (el) el.checked = true;
   });
 
-  // Nearby
   const nb = p.whats_nearby || {};
   setVal("nb_school", nb.school);
   setVal("nb_grocery", nb.grocery);
@@ -800,41 +913,40 @@ function editProperty(id) {
   setVal("nb_pharmacy", nb.pharmacy);
   setVal("nb_airport", nb.airport);
 
-  // Existing property images
+  const ag = p.agent || {};
+  setVal("ag_name", ag.name);
+  setVal("ag_title", ag.title);
+  setVal("ag_email", ag.email);
+  setVal("ag_phone", ag.phone);
+  setVal("ag_location", ag.location);
+
+  // Existing images
   const existingImgGrid = document.getElementById("existingImages");
   (p.images || []).forEach((url, i) => {
     const wrapper = document.createElement("div");
     wrapper.className = "preview-thumb";
     wrapper.id = `prev-image-e-${i}`;
-    wrapper.innerHTML = `
-      <img src="${url}" alt="image ${i}" />
-      <button class="remove-img" onclick="removeExistingImage('${url}', ${i})">✕</button>
-    `;
+    wrapper.innerHTML = `<img src="${url}" alt="image ${i}" /><button class="remove-img" onclick="removeExistingImage('${url}', ${i})">✕</button>`;
     existingImgGrid.appendChild(wrapper);
   });
 
-  // Existing floor plans (support both new array and legacy single)
   const existingFpGrid = document.getElementById("existingFloorPlans");
   const floorPlans = p.floor_plans || (p.floor_plan ? [p.floor_plan] : []);
   floorPlans.forEach((url, i) => {
     const wrapper = document.createElement("div");
     wrapper.className = "preview-thumb";
     wrapper.id = `prev-floorplan-e-${i}`;
-    wrapper.innerHTML = `
-      <img src="${url}" alt="floor plan ${i}" />
-      <button class="remove-img" onclick="removeExistingFloorPlan('${url}', ${i})">✕</button>
-    `;
+    wrapper.innerHTML = `<img src="${url}" alt="floor plan ${i}" /><button class="remove-img" onclick="removeExistingFloorPlan('${url}', ${i})">✕</button>`;
     existingFpGrid.appendChild(wrapper);
   });
 
   updateImageCountBadge();
   updateFloorPlanCountBadge();
-
   showPage("add", true);
   document.getElementById("formTitle").textContent = "Edit Property";
 }
 
-// ─── VIEW PROPERTY ────────────────────────────────────────────
+// ─── VIEW ──────────────────────────────────────────────────────
 function viewProperty(id) {
   const p = allProperties.find((x) => x.id === id);
   if (!p) return;
@@ -849,11 +961,11 @@ function viewProperty(id) {
   const uf = p.utility_features || {};
   const of_ = p.outdoor_features || {};
   const nb = p.whats_nearby || {};
-
+  const ag = p.agent || {};
   const floorPlans = p.floor_plans || (p.floor_plan ? [p.floor_plan] : []);
 
   const imgHtml = (p.images || []).length
-    ? `<div class="view-images">${p.images.map((u) => `<img src="${u}" alt="" />`).join("")}</div>`
+    ? `<div class="view-images">${p.images.map((u, i) => `<img src="${u}" alt="" onclick="openLightbox('${u}')" />`).join("")}</div>`
     : "";
 
   const dr = (k, v) =>
@@ -865,32 +977,40 @@ function viewProperty(id) {
       ? `<div class="nearby-item"><span class="nearby-icon">${icon}</span><span>${k}</span><strong>${v}</strong></div>`
       : "";
 
+  const createdDate = p.created_at
+    ? new Date(p.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+  const updatedDate = p.updated_at
+    ? new Date(p.updated_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "—";
+
   document.getElementById("viewContent").innerHTML = `
     ${imgHtml}
 
     <div class="view-stats">
-      ${p.sqft ? `<div class="stat-pill">⬜ ${p.sqft} sqft</div>` : ""}
+      ${p.sqft ? `<div class="stat-pill">⬜ ${Number(p.sqft).toLocaleString()} sqft</div>` : ""}
       ${p.bedrooms ? `<div class="stat-pill">🛏 ${p.bedrooms} Bed</div>` : ""}
       ${p.bathrooms ? `<div class="stat-pill">🚿 ${p.bathrooms} Bath</div>` : ""}
       ${p.kitchens ? `<div class="stat-pill">🍳 ${p.kitchens} Kitchen</div>` : ""}
       <div class="stat-pill price-pill">$${Number(p.price).toLocaleString()}</div>
-      <div class="stat-pill">${p.status || ""}</div>
+      ${p.status ? `<div class="stat-pill">${p.status}</div>` : ""}
     </div>
 
-    ${
-      p.google_maps_url
-        ? `
-    <div class="view-map-btn-wrap">
-      <a href="${p.google_maps_url}" target="_blank" class="btn-map">📍 View on Google Maps</a>
-    </div>`
-        : ""
-    }
+    ${p.google_maps_url ? `<a href="${p.google_maps_url}" target="_blank" class="btn-map">📍 View on Google Maps</a>` : ""}
 
     <div class="view-grid">
       <div class="view-main">
 
         ${p.description ? `<div class="view-section"><h4>Overview</h4><p>${p.description}</p></div>` : ""}
-        ${p.features_description ? `<div class="view-section"><h4>Property Feature Description</h4><p>${p.features_description}</p></div>` : ""}
+        ${p.features_description ? `<div class="view-section"><h4>Property Features</h4><p>${p.features_description}</p></div>` : ""}
 
         <div class="view-section">
           <h4>Property Details</h4>
@@ -913,36 +1033,24 @@ function viewProperty(id) {
         <div class="view-section">
           <h4>Utility Features</h4>
           <div class="detail-grid">
-            ${dr("Heating", uf.heating)}
-            ${dr("Intercom", uf.intercom)}
-            ${dr("Air Condition", uf.ac)}
-            ${dr("Window Type", uf.window_type)}
-            ${dr("Fireplace", uf.fireplace)}
-            ${dr("Cable TV", uf.cable_tv)}
-            ${dr("Elevator", uf.elevator)}
-            ${dr("WiFi", uf.wifi)}
-            ${dr("Ventilation", uf.ventilation)}
-            ${dr("Solar Panels", uf.solar)}
-            ${dr("Smart Home", uf.smart_home)}
-            ${dr("Generator", uf.generator)}
+            ${dr("Heating", uf.heating)} ${dr("Intercom", uf.intercom)}
+            ${dr("Air Condition", uf.ac)} ${dr("Window Type", uf.window_type)}
+            ${dr("Fireplace", uf.fireplace)} ${dr("Cable TV", uf.cable_tv)}
+            ${dr("Elevator", uf.elevator)} ${dr("WiFi", uf.wifi)}
+            ${dr("Ventilation", uf.ventilation)} ${dr("Solar Panels", uf.solar)}
+            ${dr("Smart Home", uf.smart_home)} ${dr("Generator", uf.generator)}
           </div>
         </div>
 
         <div class="view-section">
           <h4>Outdoor Features</h4>
           <div class="detail-grid">
-            ${dr("Garage", of_.garage)}
-            ${dr("Parking", of_.parking)}
-            ${dr("Garden", of_.garden)}
-            ${dr("Disabled Access", of_.disabled_access)}
-            ${dr("Swimming Pool", of_.pool)}
-            ${dr("Fence", of_.fence)}
-            ${dr("Security", of_.security)}
-            ${dr("Pet Friendly", of_.pet_friendly)}
-            ${dr("BBQ Area", of_.bbq)}
-            ${dr("Storage Room", of_.storage)}
-            ${dr("Terrace", of_.terrace)}
-            ${dr("Sports Court", of_.sports_court)}
+            ${dr("Garage", of_.garage)} ${dr("Parking", of_.parking)}
+            ${dr("Garden", of_.garden)} ${dr("Disabled Access", of_.disabled_access)}
+            ${dr("Swimming Pool", of_.pool)} ${dr("Fence", of_.fence)}
+            ${dr("Security", of_.security)} ${dr("Pet Friendly", of_.pet_friendly)}
+            ${dr("BBQ Area", of_.bbq)} ${dr("Storage Room", of_.storage)}
+            ${dr("Terrace", of_.terrace)} ${dr("Sports Court", of_.sports_court)}
           </div>
         </div>
 
@@ -951,9 +1059,7 @@ function viewProperty(id) {
             ? `
         <div class="view-section">
           <h4>Amenities</h4>
-          <div class="amenity-tags">
-            ${p.amenities.map((a) => `<span class="amenity-tag">✓ ${a}</span>`).join("")}
-          </div>
+          <div class="amenity-tags">${p.amenities.map((a) => `<span class="amenity-tag">✓ ${a}</span>`).join("")}</div>
         </div>`
             : ""
         }
@@ -963,9 +1069,7 @@ function viewProperty(id) {
             ? `
         <div class="view-section">
           <h4>Floor Plans</h4>
-          <div class="floor-plans-grid">
-            ${floorPlans.map((url, i) => `<img src="${url}" alt="Floor Plan ${i + 1}" />`).join("")}
-          </div>
+          <div class="floor-plans-grid">${floorPlans.map((url, i) => `<img src="${url}" alt="Floor Plan ${i + 1}" onclick="openLightbox('${url}')" style="cursor:zoom-in" />`).join("")}</div>
         </div>`
             : ""
         }
@@ -973,30 +1077,68 @@ function viewProperty(id) {
         <div class="view-section">
           <h4>What's Nearby</h4>
           <div class="nearby-grid">
-            ${nr("🏫", "School & College", nb.school)}
-            ${nr("🛒", "Grocery Center", nb.grocery)}
-            ${nr("🚇", "Metro Station", nb.metro)}
-            ${nr("💪", "Gym", nb.gym)}
-            ${nr("🎓", "University", nb.university)}
-            ${nr("🏥", "Hospital", nb.hospital)}
-            ${nr("🛍", "Shopping Mall", nb.mall)}
-            ${nr("🚔", "Police Station", nb.police)}
-            ${nr("🚌", "Bus Station", nb.bus)}
-            ${nr("🏞", "River", nb.river)}
-            ${nr("🏪", "Market", nb.market)}
-            ${nr("🍽", "Restaurant", nb.restaurant)}
-            ${nr("🌳", "Park", nb.park)}
-            ${nr("💊", "Pharmacy", nb.pharmacy)}
+            ${nr("🏫", "School & College", nb.school)} ${nr("🛒", "Grocery", nb.grocery)}
+            ${nr("🚇", "Metro Station", nb.metro)} ${nr("💪", "Gym", nb.gym)}
+            ${nr("🎓", "University", nb.university)} ${nr("🏥", "Hospital", nb.hospital)}
+            ${nr("🛍", "Shopping Mall", nb.mall)} ${nr("🚔", "Police Station", nb.police)}
+            ${nr("🚌", "Bus Station", nb.bus)} ${nr("🏞", "River", nb.river)}
+            ${nr("🏪", "Market", nb.market)} ${nr("🍽", "Restaurant", nb.restaurant)}
+            ${nr("🌳", "Park", nb.park)} ${nr("💊", "Pharmacy", nb.pharmacy)}
             ${nr("✈", "Airport", nb.airport)}
           </div>
         </div>
 
       </div>
 
+      <div class="view-sidebar">
+
+        ${
+          ag.name
+            ? `
+        <div class="agent-card">
+          <div class="agent-avatar-lg">${ag.name.charAt(0).toUpperCase()}</div>
+          <h4>${ag.name}</h4>
+          <div class="agent-role">${ag.title || "Property Agent"}</div>
+          <div class="agent-info">
+            ${ag.email ? `<div class="agent-detail">✉ <strong>${ag.email}</strong></div>` : ""}
+            ${ag.phone ? `<div class="agent-detail">📞 <strong>${ag.phone}</strong></div>` : ""}
+            ${ag.location ? `<div class="agent-detail">📍 <strong>${ag.location}</strong></div>` : ""}
+          </div>
+        </div>`
+            : ""
+        }
+
+        <div class="quick-info-card">
+          <h4>Listing Info</h4>
+          <div class="quick-row"><span>Listed</span><strong>${createdDate}</strong></div>
+          <div class="quick-row"><span>Updated</span><strong>${updatedDate}</strong></div>
+          <div class="quick-row"><span>Type</span><strong>${p.property_type || "—"}</strong></div>
+          <div class="quick-row"><span>Status</span><strong>${p.status || "—"}</strong></div>
+          <div class="quick-row"><span>Price</span><strong>$${Number(p.price).toLocaleString()}</strong></div>
+          ${p.sqft ? `<div class="quick-row"><span>Size</span><strong>${Number(p.sqft).toLocaleString()} sqft</strong></div>` : ""}
+        </div>
+
+      </div>
     </div>
   `;
 
   showPage("view");
+}
+
+// ─── LIGHTBOX ─────────────────────────────────────────────────
+function openLightbox(url) {
+  const existing = document.getElementById("lightboxOverlay");
+  if (existing) existing.remove();
+  const lb = document.createElement("div");
+  lb.className = "lightbox";
+  lb.id = "lightboxOverlay";
+  lb.innerHTML = `<img src="${url}" alt="Preview" />`;
+  lb.onclick = closeLightbox;
+  document.body.appendChild(lb);
+}
+function closeLightbox() {
+  const lb = document.getElementById("lightboxOverlay");
+  if (lb) lb.remove();
 }
 
 // ─── DELETE ───────────────────────────────────────────────────
@@ -1004,29 +1146,24 @@ function openDeleteModal(id) {
   deleteTargetId = id;
   document.getElementById("deleteModal").classList.remove("hidden");
 }
-
 function closeDeleteModal() {
   deleteTargetId = null;
   document.getElementById("deleteModal").classList.add("hidden");
 }
-
 async function confirmDelete() {
   if (!deleteTargetId) return;
   const p = allProperties.find((x) => x.id === deleteTargetId);
-
   try {
     if (p) {
       for (const url of p.images || []) await deleteImageFromStorage(url);
       const fps = p.floor_plans || (p.floor_plan ? [p.floor_plan] : []);
       for (const url of fps) await deleteImageFromStorage(url);
     }
-
     const { error } = await supabase
       .from("properties")
       .delete()
       .eq("id", deleteTargetId);
     if (error) throw error;
-
     showToast("Property deleted.", "success");
     closeDeleteModal();
     await loadListings();
@@ -1035,13 +1172,15 @@ async function confirmDelete() {
   }
 }
 
-// ─── UTILITIES ────────────────────────────────────────────────
+// ─── TOAST / ERRORS ───────────────────────────────────────────
 function showToast(msg, type = "info") {
   const t = document.getElementById("toast");
-  t.textContent = msg;
+  const icons = { success: "✓", error: "✕", info: "ℹ" };
+  t.innerHTML = `<span>${icons[type] || "ℹ"}</span> ${msg}`;
   t.className = `toast toast-${type}`;
   t.classList.remove("hidden");
-  setTimeout(() => t.classList.add("hidden"), 3500);
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.add("hidden"), 3500);
 }
 
 function showFormError(msg) {
@@ -1050,3 +1189,6 @@ function showFormError(msg) {
   el.classList.remove("hidden");
   el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
+
+// ─── INIT ──────────────────────────────────────────────────────
+checkSession();
