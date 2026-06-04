@@ -91,6 +91,7 @@ document.addEventListener("keydown", (e) => {
     closeDeleteModal();
     closeLightbox();
     closeSellModal();
+    closeSignupModal();
   }
 });
 
@@ -121,6 +122,7 @@ function showPage(name, skipReset = false) {
     add: "[onclick=\"showPage('add');return false;\"]",
     contacts: "[onclick=\"showPage('contacts');return false;\"]",
     sell: "[onclick=\"showPage('sell');return false;\"]",
+    unverified: "[onclick=\"showPage('unverified');return false;\"]",
   };
   if (navMap[name]) {
     const el = document.querySelector(navMap[name]);
@@ -135,6 +137,7 @@ function showPage(name, skipReset = false) {
 
   if (name === "contacts") loadContacts();
   if (name === "sell") loadSellRequests();
+  if (name === "unverified") loadUnverifiedUsers();
 }
 
 // ─── LISTINGS ─────────────────────────────────────────────────
@@ -1854,3 +1857,322 @@ async function approveSellRequest(id) {
 
 // ─── INIT ──────────────────────────────────────────────────────
 checkSession();
+
+// ─── EMAILJS CONFIG ───────────────────────────────────────────
+// Fill these in with your EmailJS credentials
+const EMAILJS_SERVICE_ID = "service_4wfy35n"; // e.g. "service_abc123"
+const EMAILJS_TEMPLATE_ID = "template_3qjjy3f"; // e.g. "template_xyz789"
+const EMAILJS_PUBLIC_KEY = "HUNkfZPqr6bW_8UyE"; // e.g. "abcDEFghiJKL"
+
+// Initialise EmailJS once (safe to call multiple times)
+(function initEmailJS() {
+  if (typeof emailjs !== "undefined") {
+    emailjs.init(EMAILJS_PUBLIC_KEY);
+  }
+})();
+
+// ─── SIGNUP ───────────────────────────────────────────────────
+function openSignupModal() {
+  document.getElementById("signupModal").classList.remove("hidden");
+  document.getElementById("su_name").focus();
+}
+function closeSignupModal() {
+  document.getElementById("signupModal").classList.add("hidden");
+  document.getElementById("su_name").value = "";
+  document.getElementById("su_email").value = "";
+  document.getElementById("su_phone").value = "";
+  document.getElementById("signupError").classList.add("hidden");
+  document.getElementById("signupBtn").disabled = false;
+  document.getElementById("signupBtn").textContent = "Submit Request →";
+}
+
+async function doSignup() {
+  const name = document.getElementById("su_name").value.trim();
+  const email = document.getElementById("su_email").value.trim();
+  const phone = document.getElementById("su_phone").value.trim();
+  const errEl = document.getElementById("signupError");
+  const btn = document.getElementById("signupBtn");
+
+  errEl.classList.add("hidden");
+
+  if (!name || !email || !phone) {
+    errEl.textContent = "All fields are required.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errEl.textContent = "Please enter a valid email address.";
+    errEl.classList.remove("hidden");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Submitting…";
+
+  // Check for duplicate email
+  const { data: existing } = await supabase
+    .from("pending_users")
+    .select("id")
+    .eq("email", email)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    errEl.textContent =
+      "This email has already been submitted. Please wait for admin approval.";
+    errEl.classList.remove("hidden");
+    btn.disabled = false;
+    btn.textContent = "Submit Request →";
+    return;
+  }
+
+  const { error } = await supabase.from("pending_users").insert([
+    {
+      full_name: name,
+      email,
+      phone,
+      status: "pending",
+    },
+  ]);
+
+  if (error) {
+    errEl.textContent = "Error: " + error.message;
+    errEl.classList.remove("hidden");
+    btn.disabled = false;
+    btn.textContent = "Submit Request →";
+    return;
+  }
+
+  closeSignupModal();
+  showToast(
+    "✓ Request submitted! An admin will review and email your credentials.",
+    "success",
+  );
+}
+
+// ─── UNVERIFIED USERS ─────────────────────────────────────────
+let allUnverifiedUsers = [];
+
+async function loadUnverifiedUsers() {
+  document.getElementById("unverifiedTable").innerHTML = `
+    <tr><td colspan="5" style="text-align:center;padding:60px;color:var(--text-muted)">
+      <div class="spinner" style="margin:0 auto 12px"></div>Loading users…
+    </td></tr>`;
+
+  const { data, error } = await supabase
+    .from("pending_users")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    showToast("Error loading users: " + error.message, "error");
+    return;
+  }
+
+  allUnverifiedUsers = data || [];
+  updateUnverifiedStats();
+  updateUnverifiedBadge();
+  filterUnverifiedUsers();
+}
+
+function updateUnverifiedStats() {
+  const pending = allUnverifiedUsers.filter(
+    (u) => u.status === "pending",
+  ).length;
+  const verified = allUnverifiedUsers.filter(
+    (u) => u.status === "verified",
+  ).length;
+  document.getElementById("uvStatPending").textContent = pending;
+  document.getElementById("uvStatVerified").textContent = verified;
+  document.getElementById("uvStatTotal").textContent =
+    allUnverifiedUsers.length;
+}
+
+function updateUnverifiedBadge() {
+  const pending = allUnverifiedUsers.filter(
+    (u) => u.status === "pending",
+  ).length;
+  const badge = document.getElementById("unverifiedBadge");
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.classList.remove("hidden");
+  } else {
+    badge.classList.add("hidden");
+  }
+}
+
+function filterUnverifiedUsers() {
+  const search = (
+    document.getElementById("uvSearch").value || ""
+  ).toLowerCase();
+  const status = document.getElementById("uvStatusFilter").value;
+
+  const filtered = allUnverifiedUsers.filter((u) => {
+    const matchSearch =
+      !search ||
+      (u.full_name || "").toLowerCase().includes(search) ||
+      (u.email || "").toLowerCase().includes(search) ||
+      (u.phone || "").toLowerCase().includes(search);
+    const matchStatus = !status || u.status === status;
+    return matchSearch && matchStatus;
+  });
+
+  document.getElementById("unverifiedCount").textContent =
+    `${filtered.length} user${filtered.length !== 1 ? "s" : ""} found`;
+
+  renderUnverifiedTable(filtered);
+}
+
+function renderUnverifiedTable(users) {
+  const tbody = document.getElementById("unverifiedTable");
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:60px;color:var(--text-muted)">No users found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = users
+    .map((u) => {
+      const initials = (u.full_name || "?")
+        .split(" ")
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      const date = u.created_at
+        ? new Date(u.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—";
+      const isPending = u.status === "pending";
+
+      const statusBadge = isPending
+        ? `<span class="contact-status-badge cs-new">Pending</span>`
+        : `<span class="contact-status-badge cs-closed">Verified</span>`;
+
+      const actionBtn = isPending
+        ? `<button
+           onclick="verifyUser('${u.id}')"
+           style="padding:7px 16px;border-radius:8px;background:var(--gold);color:var(--dark);
+                  border:none;font-size:12px;font-weight:700;cursor:pointer;transition:opacity 0.2s"
+           onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">
+           ✓ Verify & Send Credentials
+         </button>`
+        : `<span style="font-size:12px;color:var(--text-muted)">✓ Credentials sent</span>`;
+
+      return `
+      <tr class="contact-row-item">
+        <td>
+          <div class="contact-name-cell">
+            <div class="contact-avatar">${initials}</div>
+            <div>
+              <div class="contact-name">${escHtml(u.full_name)}</div>
+              <div class="contact-email">${escHtml(u.email)}</div>
+            </div>
+          </div>
+        </td>
+        <td style="color:var(--text-muted);font-size:13px">${escHtml(u.phone || "—")}</td>
+        <td>${statusBadge}</td>
+        <td class="contact-date">${date}</td>
+        <td>${actionBtn}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+// ─── VERIFY USER & SEND EMAIL ─────────────────────────────────
+function generatePassword(length = 8) {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  let pass = "";
+  for (let i = 0; i < length; i++) {
+    pass += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pass;
+}
+
+function generateUsername(fullName) {
+  const parts = (fullName || "user")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, "")
+    .split(" ")
+    .filter(Boolean);
+  const base = parts.slice(0, 2).join(".");
+  const suffix = Math.floor(100 + Math.random() * 900);
+  return base ? `${base}${suffix}` : `user${suffix}`;
+}
+
+async function verifyUser(userId) {
+  const user = allUnverifiedUsers.find((u) => u.id === userId);
+  if (!user) return;
+
+  const confirmed = confirm(
+    `Verify "${user.full_name}" and send login credentials to ${user.email}?`,
+  );
+  if (!confirmed) return;
+
+  // Generate credentials
+  const username = generateUsername(user.full_name);
+  const password = generatePassword(8);
+
+  // 1. Save credentials to Supabase
+  const { error: updateErr } = await supabase
+    .from("pending_users")
+    .update({
+      status: "verified",
+      username,
+      password_plain: password,
+      verified_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+
+  if (updateErr) {
+    showToast("Failed to update user: " + updateErr.message, "error");
+    return;
+  }
+
+  // 2. Send email via EmailJS
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      to_name: user.full_name,
+      to_email: user.email,
+      username: username,
+      password: password,
+      login_url: window.location.href,
+    });
+
+    // Update local state
+    user.status = "verified";
+    user.username = username;
+    user.password_plain = password;
+
+    updateUnverifiedStats();
+    updateUnverifiedBadge();
+    filterUnverifiedUsers();
+    showToast(`✓ Credentials emailed to ${user.email}`, "success");
+  } catch (emailErr) {
+    // Email failed — but DB is already updated. Show error with credentials so admin can copy.
+    showToast("⚠ DB updated but email failed. Check EmailJS config.", "error");
+    console.error("EmailJS error:", emailErr);
+    alert(
+      `EmailJS failed. Here are the credentials to share manually:\n\nUsername: ${username}\nPassword: ${password}\nEmail: ${user.email}`,
+    );
+  }
+}
+
+// Load unverified badge count on portal init
+const _origEnterPortal = enterPortal;
+window.enterPortal = function () {
+  _origEnterPortal();
+  // Load badge silently
+  supabase
+    .from("pending_users")
+    .select("id")
+    .eq("status", "pending")
+    .then(({ data }) => {
+      if (data && data.length > 0) {
+        const badge = document.getElementById("unverifiedBadge");
+        badge.textContent = data.length;
+        badge.classList.remove("hidden");
+      }
+    });
+};

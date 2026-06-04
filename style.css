@@ -1843,3 +1843,40 @@ body {
   display: flex;
   gap: 14px;
 }
+
+/* ─── SIGNUP MODAL / MODAL OVERLAY ──────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal {
+  background: var(--dark2);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  padding: 32px;
+  box-shadow:
+    var(--shadow),
+    0 0 0 1px rgba(201, 168, 76, 0.06);
+  animation: fadeUp 0.28s ease;
+  position: relative;
+}
+
+/* ─── UNVERIFIED USERS STATUS BADGE ─────────────────── */
+.uv-pending {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--info);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+.uv-verified {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
