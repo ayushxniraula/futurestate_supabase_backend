@@ -2,8 +2,8 @@
 //  ESTATE ADMIN — Application Logic (v3 — with Sell Requests)
 // ============================================================
 
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "admin@123";
+const ADMIN_USER = "super_admin";
+const ADMIN_PASS = "G,5W~PhkU]?^p:VuWo?w";
 const SESSION_KEY = "ea_session";
 
 // State
@@ -1860,9 +1860,9 @@ checkSession();
 
 // ─── EMAILJS CONFIG ───────────────────────────────────────────
 // Fill these in with your EmailJS credentials
-const EMAILJS_SERVICE_ID = "service_4wfy35n"; // e.g. "service_abc123"
-const EMAILJS_TEMPLATE_ID = "template_3qjjy3f"; // e.g. "template_xyz789"
-const EMAILJS_PUBLIC_KEY = "HUNkfZPqr6bW_8UyE"; // e.g. "abcDEFghiJKL"
+const EMAILJS_SERVICE_ID = "service_bp7kebl"; // e.g. "service_abc123"
+const EMAILJS_TEMPLATE_ID = "template_va5aghg"; // e.g. "template_xyz789"
+const EMAILJS_PUBLIC_KEY = "pkALzNcdOZrTwcIvI"; // e.g. "abcDEFghiJKL"
 
 // Initialise EmailJS once (safe to call multiple times)
 (function initEmailJS() {
