@@ -221,6 +221,17 @@
             href="#"
             class="nav-item"
             onclick="
+              showPage('tenant');
+              return false;
+            "
+          >
+            <span class="nav-icon">🪪</span> Tenant / Landlord
+            <span id="tenantNewBadge" class="nav-badge hidden">0</span>
+          </a>
+          <a
+            href="#"
+            class="nav-item"
+            onclick="
               showPage('unverified');
               return false;
             "
@@ -425,7 +436,7 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label>Price (USD) *</label>
+                    <label>Price (NPR) *</label>
                     <input
                       type="number"
                       id="f_price"
@@ -434,6 +445,17 @@
                     />
                   </div>
                 </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Building Type</label>
+                    <input
+                      type="text"
+                      id="f_building_type"
+                      placeholder="e.g. High-rise, Bungalow, Duplex"
+                    />
+                  </div>
+                </div>
+                <br />
                 <div class="form-group">
                   <label>Full Address *</label>
                   <input
@@ -1345,6 +1367,30 @@
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
+            <div class="view-toggle" id="sellSubmitterToggle">
+              <button
+                id="sellSubmitterAllBtn"
+                class="active"
+                onclick="setSellSubmitterFilter('all')"
+                title="Show all"
+              >
+                All
+              </button>
+              <button
+                id="sellSubmitterUserBtn"
+                onclick="setSellSubmitterFilter('user')"
+                title="Show submissions from users"
+              >
+                Owner
+              </button>
+              <button
+                id="sellSubmitterAgentBtn"
+                onclick="setSellSubmitterFilter('agent')"
+                title="Show submissions from agents"
+              >
+                Agent
+              </button>
+            </div>
           </div>
 
           <!-- Grid -->
@@ -1381,6 +1427,122 @@
             </table>
           </div>
         </div>
+
+        <!-- TENANT / LANDLORD REQUESTS PAGE -->
+        <div id="page-tenant" class="page hidden">
+          <div class="page-header">
+            <div>
+              <h1>Tenant / Landlord Requests</h1>
+              <p id="tenantCount">Loading…</p>
+            </div>
+            <div class="header-actions">
+              <button
+                class="btn-secondary"
+                onclick="loadTenantRequests()"
+                title="Refresh"
+              >
+                ↺ Refresh
+              </button>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-bar">
+            <div class="stat-card gold">
+              <div class="stat-label">Total</div>
+              <div class="stat-value" id="tStatTotal">—</div>
+              <div class="stat-sub">requests</div>
+              <div class="stat-icon">📋</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value" id="tStatPending">—</div>
+              <div class="stat-sub">awaiting review</div>
+              <div class="stat-icon">⏳</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Contacted</div>
+              <div class="stat-value" id="tStatContacted">—</div>
+              <div class="stat-sub">in progress</div>
+              <div class="stat-icon">📞</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Closed</div>
+              <div class="stat-value" id="tStatClosed">—</div>
+              <div class="stat-sub">completed</div>
+              <div class="stat-icon">✓</div>
+            </div>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <div class="search-wrap" style="min-width: 260px">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                id="tenantSearch"
+                placeholder="Search name, email, location…"
+                oninput="filterTenantRequests()"
+              />
+            </div>
+            <select id="tenantStatusFilter" onchange="filterTenantRequests()">
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="contacted">Contacted</option>
+              <option value="closed">Closed</option>
+            </select>
+            <select id="tenantTypeFilter" onchange="filterTenantRequests()">
+              <option value="">All Types</option>
+              <option value="Rent">Rent</option>
+              <option value="Sale">Sale</option>
+            </select>
+          </div>
+
+          <!-- Table -->
+          <div class="contacts-table-wrap">
+            <table class="contacts-table">
+              <thead>
+                <tr>
+                  <th>Applicant</th>
+                  <th>Looking For</th>
+                  <th>Property Type</th>
+                  <th>Location</th>
+                  <th>Budget</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tenantRequestsTable">
+                <tr>
+                  <td
+                    colspan="8"
+                    style="
+                      text-align: center;
+                      padding: 60px;
+                      color: var(--text-muted);
+                    "
+                  >
+                    <div class="spinner" style="margin: 0 auto 12px"></div>
+                    Loading tenant / landlord requests…
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- UNVERIFIED USERS PAGE -->
         <div id="page-unverified" class="page hidden">
           <div class="page-header">
@@ -1515,6 +1677,18 @@
       <div class="modal contact-modal">
         <div class="modal-close-btn" onclick="closeSellModal()">✕</div>
         <div id="sellModalContent"></div>
+      </div>
+    </div>
+
+    <!-- TENANT / LANDLORD REQUEST DETAIL MODAL -->
+    <div
+      id="tenantModal"
+      class="modal-overlay hidden"
+      onclick="if (event.target === this) closeTenantModal();"
+    >
+      <div class="modal contact-modal">
+        <div class="modal-close-btn" onclick="closeTenantModal()">✕</div>
+        <div id="tenantModalContent"></div>
       </div>
     </div>
 

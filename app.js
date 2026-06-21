@@ -3,7 +3,7 @@
 // ============================================================
 
 const ADMIN_USER = "super_admin";
-const ADMIN_PASS = "G,5W~PhkU]?^p:VuWo?w";
+const ADMIN_PASS = "future@estate01";
 const SESSION_KEY = "ea_session";
 
 // State
@@ -91,6 +91,7 @@ document.addEventListener("keydown", (e) => {
     closeDeleteModal();
     closeLightbox();
     closeSellModal();
+    closeTenantModal();
     closeSignupModal();
   }
 });
@@ -122,6 +123,7 @@ function showPage(name, skipReset = false) {
     add: "[onclick=\"showPage('add');return false;\"]",
     contacts: "[onclick=\"showPage('contacts');return false;\"]",
     sell: "[onclick=\"showPage('sell');return false;\"]",
+    tenant: "[onclick=\"showPage('tenant');return false;\"]",
     unverified: "[onclick=\"showPage('unverified');return false;\"]",
   };
   if (navMap[name]) {
@@ -137,6 +139,7 @@ function showPage(name, skipReset = false) {
 
   if (name === "contacts") loadContacts();
   if (name === "sell") loadSellRequests();
+  if (name === "tenant") loadTenantRequests();
   if (name === "unverified") loadUnverifiedUsers();
 }
 
@@ -305,7 +308,7 @@ function getStatusClass(status) {
 
 function formatPrice(p) {
   const n = Number(p.price).toLocaleString();
-  return p.status === "For Rent" ? `$${n}/mo` : `$${n}`;
+  return p.status === "For Rent" ? `NPR ${n}/mo` : `NPR ${n}`;
 }
 
 function escHtml(str) {
@@ -331,6 +334,7 @@ function resetForm() {
   const ids = [
     "f_title",
     "f_type",
+    "f_building_type",
     "f_status",
     "f_price",
     "f_location",
@@ -608,6 +612,7 @@ function collectFormData() {
   return {
     title: getVal("f_title"),
     property_type: getVal("f_type"),
+    building_type: getVal("f_building_type"),
     status: getVal("f_status"),
     price: parseFloat(getVal("f_price")) || 0,
     location: getVal("f_location"),
@@ -746,6 +751,7 @@ async function saveProperty() {
       [
         "title",
         "property_type",
+        "building_type",
         "status",
         "price",
         "location",
@@ -823,6 +829,7 @@ function editProperty(id) {
 
   setVal("f_title", p.title);
   setVal("f_type", p.property_type);
+  setVal("f_building_type", p.building_type);
   setVal("f_status", p.status);
   setVal("f_price", p.price);
   setVal("f_location", p.location);
@@ -1003,7 +1010,7 @@ function viewProperty(id) {
       ${p.bedrooms ? `<div class="stat-pill">🛏 ${p.bedrooms} Bed</div>` : ""}
       ${p.bathrooms ? `<div class="stat-pill">🚿 ${p.bathrooms} Bath</div>` : ""}
       ${p.kitchens ? `<div class="stat-pill">🍳 ${p.kitchens} Kitchen</div>` : ""}
-      <div class="stat-pill price-pill">$${Number(p.price).toLocaleString()}</div>
+      <div class="stat-pill price-pill">NPR ${Number(p.price).toLocaleString()}</div>
       ${p.status ? `<div class="stat-pill">${p.status}</div>` : ""}
     </div>
     ${p.google_maps_url ? `<a href="${p.google_maps_url}" target="_blank" class="btn-map">📍 View on Google Maps</a>` : ""}
@@ -1454,6 +1461,16 @@ function closeContactModal() {
 // ─── SELL REQUESTS ────────────────────────────────────────────
 let allSellRequests = [];
 let filteredSellRequests = [];
+let sellSubmitterFilter = "all"; // "all" | "user" | "agent"
+
+function setSellSubmitterFilter(type) {
+  sellSubmitterFilter = type;
+  ["All", "User", "Agent"].forEach((label) => {
+    const btn = document.getElementById(`sellSubmitter${label}Btn`);
+    if (btn) btn.classList.toggle("active", label.toLowerCase() === type);
+  });
+  filterSellRequests();
+}
 
 async function loadSellRequests() {
   const tbody = document.getElementById("sellRequestsTable");
@@ -1528,7 +1545,11 @@ function filterSellRequests() {
       r.location?.toLowerCase().includes(q);
     const matchStatus = !statusF || r.review_status === statusF;
     const matchType = !typeF || r.property_type === typeF;
-    return matchQ && matchStatus && matchType;
+    const isAgent = !!r.agent?.is_agent;
+    const matchSubmitter =
+      sellSubmitterFilter === "all" ||
+      (sellSubmitterFilter === "agent" ? isAgent : !isAgent);
+    return matchQ && matchStatus && matchType && matchSubmitter;
   });
 
   renderSellTable(filteredSellRequests);
@@ -1559,10 +1580,14 @@ function renderSellTable(list) {
         year: "numeric",
       });
       const price = r.price ? "$" + Number(r.price).toLocaleString() : "—";
+      const isAgent = !!r.agent?.is_agent;
+      const submitterBadge = isAgent
+        ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#1C94A422;color:#1C94A4;font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;vertical-align:middle">Agent</span>`
+        : "";
       return `
       <tr style="cursor:pointer" onclick="openSellModal('${r.id}')">
         <td>
-          <div style="font-weight:600;font-size:13.5px">${escHtml(r.contact_name || "—")}</div>
+          <div style="font-weight:600;font-size:13.5px">${escHtml(r.contact_name || "—")}${submitterBadge}</div>
           <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.contact_email || "")}</div>
           <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.contact_phone || "")}</div>
         </td>
@@ -1638,6 +1663,21 @@ function openSellModal(id) {
       ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${r.images.map((url) => `<img src="${url}" style="width:90px;height:70px;object-fit:cover;border-radius:7px;border:1px solid var(--border)" onclick="openLightbox('${url}')" style="cursor:zoom-in" />`).join("")}</div>`
       : "<em style='color:var(--text-muted);font-size:12px'>No images uploaded</em>";
 
+  const isAgent = !!r.agent?.is_agent;
+  const agentHtml = isAgent
+    ? `
+      <div style="background:#1C94A411;border-radius:12px;padding:16px;margin-bottom:18px;border:1px solid #1C94A444">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span style="padding:3px 10px;border-radius:20px;background:#1C94A422;color:#1C94A4;font-size:10.5px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">Agent Submission</span>
+        </div>
+        ${renderKV({
+          name: r.agent?.agent_name || "",
+          phone: r.agent?.agent_phone || "",
+          email: r.agent?.agent_email || "",
+        })}
+      </div>`
+    : "";
+
   document.getElementById("sellModalContent").innerHTML = `
     <div style="padding:8px 0">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
@@ -1669,9 +1709,9 @@ function openSellModal(id) {
         <button onclick="approveSellRequest('${r.id}')"
           style="flex:1;padding:10px;border-radius:9px;background:#4caf50;color:#fff;
             border:none;font-size:13px;font-weight:700;cursor:pointer">
-          ✓ Add to Listings
-        </button>
       </div>
+
+      ${agentHtml}
 
       <div style="background:var(--dark3);border-radius:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border)">
         <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:12px">Property Summary</div>
@@ -1853,6 +1893,349 @@ async function approveSellRequest(id) {
   updateSellBadge(allSellRequests);
   filterSellRequests();
   closeSellModal();
+}
+
+// ─── TENANT / LANDLORD REQUESTS PAGE ──────────────────────────
+let allTenantRequests = [];
+let filteredTenantRequests = [];
+
+async function loadTenantRequests() {
+  const tbody = document.getElementById("tenantRequestsTable");
+  if (!tbody) return;
+  tbody.innerHTML = `
+    <tr><td colspan="8" style="text-align:center;padding:60px;color:var(--text-muted)">
+      <div class="spinner" style="margin:0 auto 12px"></div>Loading…
+    </td></tr>`;
+
+  try {
+    const { data, error } = await supabase
+      .from("tenant_landlord_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    allTenantRequests = data || [];
+    updateTenantStats(allTenantRequests);
+    filterTenantRequests();
+    updateTenantBadge(allTenantRequests);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#e84545">
+      ⚠ ${err.message}</td></tr>`;
+  }
+}
+
+function updateTenantStats(list) {
+  const tTotal = document.getElementById("tStatTotal");
+  const tPending = document.getElementById("tStatPending");
+  const tContacted = document.getElementById("tStatContacted");
+  const tClosed = document.getElementById("tStatClosed");
+  const tCount = document.getElementById("tenantCount");
+
+  if (tTotal) tTotal.textContent = list.length;
+  if (tPending)
+    tPending.textContent = list.filter(
+      (r) => r.review_status === "pending",
+    ).length;
+  if (tContacted)
+    tContacted.textContent = list.filter(
+      (r) => r.review_status === "contacted",
+    ).length;
+  if (tClosed)
+    tClosed.textContent = list.filter(
+      (r) => r.review_status === "closed",
+    ).length;
+  if (tCount)
+    tCount.textContent = `${list.length} total request${list.length !== 1 ? "s" : ""}`;
+}
+
+function updateTenantBadge(list) {
+  const pending = list.filter((r) => r.review_status === "pending").length;
+  const badge = document.getElementById("tenantNewBadge");
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.classList.remove("hidden");
+  } else badge.classList.add("hidden");
+}
+
+function filterTenantRequests() {
+  const q = (
+    document.getElementById("tenantSearch")?.value || ""
+  ).toLowerCase();
+  const statusF = document.getElementById("tenantStatusFilter")?.value || "";
+  const typeF = document.getElementById("tenantTypeFilter")?.value || "";
+
+  filteredTenantRequests = allTenantRequests.filter((r) => {
+    const matchQ =
+      !q ||
+      r.full_name?.toLowerCase().includes(q) ||
+      r.email?.toLowerCase().includes(q) ||
+      r.preferred_location?.toLowerCase().includes(q) ||
+      r.permanent_address?.toLowerCase().includes(q);
+    const matchStatus = !statusF || r.review_status === statusF;
+    const matchType = !typeF || r.request_type === typeF;
+    return matchQ && matchStatus && matchType;
+  });
+
+  renderTenantTable(filteredTenantRequests);
+}
+
+function renderTenantTable(list) {
+  const tbody = document.getElementById("tenantRequestsTable");
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:60px;color:var(--text-muted)">No tenant / landlord requests found.</td></tr>`;
+    return;
+  }
+
+  const statusColors = {
+    pending: "#ff9800",
+    reviewed: "#2196f3",
+    contacted: "#9c27b0",
+    closed: "#4caf50",
+  };
+
+  tbody.innerHTML = list
+    .map((r) => {
+      const color = statusColors[r.review_status] || "#888";
+      const date = new Date(r.created_at).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+      const types = (r.property_types || []).join(", ") || "—";
+      return `
+      <tr style="cursor:pointer" onclick="openTenantModal('${r.id}')">
+        <td>
+          <div style="font-weight:600;font-size:13.5px">${escHtml(r.full_name || "—")}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.email || "")}</div>
+          <div style="font-size:12px;color:var(--text-muted)">${escHtml(r.contact_no || "")}</div>
+        </td>
+        <td><span style="font-size:12px;background:var(--dark3);padding:3px 9px;border-radius:6px">${escHtml(r.request_type || "—")}</span></td>
+        <td style="max-width:180px">
+          <div style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(types)}</div>
+        </td>
+        <td style="font-size:12.5px;color:var(--text-muted)">${escHtml(r.preferred_location || "—")}</td>
+        <td style="font-weight:700;font-size:13px">${escHtml(r.budget || "—")}</td>
+        <td>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;
+            background:${color}22;color:${color};font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">
+            <span style="width:6px;height:6px;border-radius:50%;background:${color};display:inline-block"></span>
+            ${r.review_status}
+          </span>
+        </td>
+        <td style="font-size:12px;color:var(--text-muted)">${date}</td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:6px">
+            <button class="btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openTenantModal('${r.id}')">View</button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function openTenantModal(id) {
+  const r = allTenantRequests.find((x) => x.id === id);
+  if (!r) return;
+
+  if (r.review_status === "pending") {
+    supabase
+      .from("tenant_landlord_requests")
+      .update({ review_status: "reviewed" })
+      .eq("id", id)
+      .then(() => {
+        r.review_status = "reviewed";
+        updateTenantBadge(allTenantRequests);
+        renderTenantTable(filteredTenantRequests);
+      });
+  }
+
+  const statusColors = {
+    pending: "#ff9800",
+    reviewed: "#2196f3",
+    contacted: "#9c27b0",
+    closed: "#4caf50",
+  };
+  const color = statusColors[r.review_status] || "#888";
+
+  const renderChips = (arr) => {
+    if (!arr || arr.length === 0)
+      return "<em style='color:var(--text-muted);font-size:12px'>None selected</em>";
+    return `<div style="display:flex;flex-wrap:wrap;gap:6px">${arr
+      .map(
+        (a) =>
+          `<span style="padding:5px 12px;border-radius:20px;background:var(--dark3);border:1px solid var(--border);font-size:12px;font-weight:600;color:var(--text)">${escHtml(a)}</span>`,
+      )
+      .join("")}</div>`;
+  };
+
+  const idDocHtml = r.id_document_url
+    ? `<a href="${r.id_document_url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:9px;background:var(--dark3);border:1px solid var(--border);font-size:12.5px;font-weight:600;color:var(--text);text-decoration:none">
+         📄 View Uploaded ID Document ↗
+       </a>`
+    : "<em style='color:var(--text-muted);font-size:12px'>No document uploaded</em>";
+
+  document.getElementById("tenantModalContent").innerHTML = `
+    <div style="padding:8px 0">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:22px">
+        <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#9c27b0,#1a1a1a);
+          display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.3rem;font-weight:700;flex-shrink:0">
+          ${(r.full_name || "?")[0].toUpperCase()}
+        </div>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:var(--text)">${escHtml(r.full_name || "—")}</div>
+          <div style="font-size:13px;color:var(--text-muted)">${escHtml(r.email || "")} · ${escHtml(r.contact_no || "")}</div>
+        </div>
+        <span style="margin-left:auto;padding:5px 14px;border-radius:20px;background:${color}22;
+          color:${color};font-size:11px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase">
+          ${r.review_status}
+        </span>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:22px">
+        <a href="mailto:${encodeURIComponent(r.email || "")}?subject=Regarding your ${encodeURIComponent(r.request_type || "")} request"
+          style="flex:1;padding:10px;border-radius:9px;background:var(--gold);color:#000;
+            text-align:center;text-decoration:none;font-size:13px;font-weight:700">
+          ✉ Email Applicant
+        </a>
+        <a href="tel:${encodeURIComponent(r.contact_no || "")}"
+          style="flex:1;padding:10px;border-radius:9px;background:var(--dark3);color:var(--text);
+            text-align:center;text-decoration:none;font-size:13px;font-weight:700;border:1px solid var(--border)">
+          📞 Call Applicant
+        </a>
+      </div>
+
+      <div style="background:var(--dark3);border-radius:12px;padding:18px;margin-bottom:18px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:12px">Request Summary</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px">${escHtml(r.request_type || "—")} — ${escHtml((r.property_types || []).join(", ") || "Any type")}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:14px">📍 ${escHtml(r.preferred_location || "—")}</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+          ${[
+            ["Budget", escHtml(r.budget || "—")],
+            ["Adults", r.adults ?? 0],
+            ["Children", r.children ?? 0],
+            ["Pets", r.pets ?? 0],
+          ]
+            .map(
+              ([l, v]) => `
+            <div style="background:var(--dark2);border-radius:8px;border:1px solid var(--border);padding:10px 6px">
+              <div style="font-size:10px;color:var(--text-muted);font-weight:700;letter-spacing:0.5px;text-transform:uppercase">${l}</div>
+              <div style="font-size:14px;font-weight:700;color:var(--text);margin-top:3px">${v}</div>
+            </div>`,
+            )
+            .join("")}
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Personal Details</div>
+        <div style="display:flex;flex-direction:column;gap:0">
+          ${[
+            ["Date of Birth", r.date_of_birth || "—"],
+            ["Occupation", r.occupation || "—"],
+            ["Temporary Address", r.temporary_address || "—"],
+            ["Permanent Address", r.permanent_address || "—"],
+          ]
+            .map(
+              ([k, v]) => `
+            <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+              <span style="color:var(--text-muted)">${k}</span>
+              <span style="font-weight:600;color:var(--text);text-align:right;max-width:60%">${escHtml(String(v))}</span>
+            </div>`,
+            )
+            .join("")}
+        </div>
+      </div>
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Property Category</div>
+        ${renderChips(r.property_category)}
+      </div>
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Vehicles</div>
+        ${renderChips(r.vehicles)}
+      </div>
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Facilities Requested</div>
+        ${renderChips(r.facilities)}
+      </div>
+
+      ${
+        r.description
+          ? `
+        <div style="margin-bottom:18px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Description / Notes from Applicant</div>
+          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0">${escHtml(r.description)}</p>
+        </div>`
+          : ""
+      }
+
+      <div style="margin-bottom:18px">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">ID / Citizenship Document</div>
+        ${idDocHtml}
+      </div>
+
+      <div style="margin-bottom:18px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-muted)">
+        <span style="width:8px;height:8px;border-radius:50%;background:${r.agreed_to_terms ? "#4caf50" : "#e84545"};display:inline-block"></span>
+        ${r.agreed_to_terms ? "Agreed to Terms & Conditions" : "Did not agree to Terms & Conditions"}
+      </div>
+
+      <div style="background:var(--dark3);border-radius:12px;padding:16px;margin-top:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:10px">Admin Notes & Status</div>
+        <textarea id="tenantAdminNotes_${r.id}" rows="3"
+          style="width:100%;padding:10px 13px;border-radius:8px;border:1px solid var(--border);
+            font-size:13px;background:var(--dark2);outline:none;resize:vertical;font-family:inherit;color:var(--text)"
+          placeholder="Add notes about this request…">${escHtml(r.admin_notes || "")}</textarea>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          ${["reviewed", "contacted", "closed"]
+            .map(
+              (s) => `
+            <button onclick="updateTenantStatus('${r.id}','${s}')"
+              style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--dark2);
+                font-size:12px;font-weight:700;cursor:pointer;color:var(--text-muted);transition:all 0.2s"
+              onmouseover="this.style.background='var(--gold)';this.style.color='#000'"
+              onmouseout="this.style.background='var(--dark2)';this.style.color='var(--text-muted)'">
+              ${s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("tenantModal").classList.remove("hidden");
+}
+
+function closeTenantModal() {
+  document.getElementById("tenantModal").classList.add("hidden");
+}
+
+async function updateTenantStatus(id, status) {
+  const notes = document.getElementById(`tenantAdminNotes_${id}`)?.value || "";
+  const { error } = await supabase
+    .from("tenant_landlord_requests")
+    .update({ review_status: status, admin_notes: notes })
+    .eq("id", id);
+
+  if (error) {
+    showToast("Failed to update: " + error.message, "error");
+    return;
+  }
+
+  const r = allTenantRequests.find((x) => x.id === id);
+  if (r) {
+    r.review_status = status;
+    r.admin_notes = notes;
+  }
+  updateTenantStats(allTenantRequests);
+  updateTenantBadge(allTenantRequests);
+  filterTenantRequests();
+  showToast(`Status updated to "${status}"`);
+  closeTenantModal();
 }
 
 // ─── INIT ──────────────────────────────────────────────────────
@@ -2173,6 +2556,21 @@ window.enterPortal = function () {
         const badge = document.getElementById("unverifiedBadge");
         badge.textContent = data.length;
         badge.classList.remove("hidden");
+      }
+    });
+
+  // Load tenant/landlord pending badge silently
+  supabase
+    .from("tenant_landlord_requests")
+    .select("id")
+    .eq("review_status", "pending")
+    .then(({ data }) => {
+      if (data && data.length > 0) {
+        const badge = document.getElementById("tenantNewBadge");
+        if (badge) {
+          badge.textContent = data.length;
+          badge.classList.remove("hidden");
+        }
       }
     });
 };
