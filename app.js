@@ -554,24 +554,52 @@ function removeExistingFloorPlan(url, idx) {
   updateFloorPlanCountBadge();
 }
 
-// ─── STORAGE ──────────────────────────────────────────────────
+// ─── STORAGE (cPanel) ───────────────────────────────────────────
 async function uploadImage(file, folder) {
-  const ext = file.name.split(".").pop();
-  const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filename, file, { cacheControl: "3600", upsert: false });
-  if (error) throw error;
-  const { data: urlData } = supabase.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(filename);
-  return urlData.publicUrl;
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("folder", folder); // "listings" or "floorplans"
+
+  const headers = {};
+  if (CPANEL_UPLOAD_SECRET) headers["X-Upload-Secret"] = CPANEL_UPLOAD_SECRET;
+
+  const res = await fetch(CPANEL_UPLOAD_URL, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try {
+      const errBody = await res.json();
+      if (errBody?.error) msg = errBody.error;
+    } catch (_) {}
+    throw new Error(msg);
+  }
+
+  const json = await res.json();
+  if (!json.url) throw new Error("Upload response missing URL.");
+  return json.url;
 }
 
 async function deleteImageFromStorage(url) {
   try {
-    const path = url.split(`/${STORAGE_BUCKET}/`)[1];
-    if (path) await supabase.storage.from(STORAGE_BUCKET).remove([path]);
+    // Extract the "listings/xxx.jpg" or "floorplans/xxx.jpg" path from the
+    // full public URL, e.g. https://futurestateagency.com/uploads/listings/xxx.jpg
+    const marker = "/uploads/";
+    const idx = url.indexOf(marker);
+    if (idx === -1) return; // not a cPanel-hosted URL (e.g. legacy Supabase URL) — skip
+    const path = url.slice(idx + marker.length);
+
+    const headers = { "Content-Type": "application/json" };
+    if (CPANEL_UPLOAD_SECRET) headers["X-Upload-Secret"] = CPANEL_UPLOAD_SECRET;
+
+    await fetch(CPANEL_DELETE_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ path }),
+    });
   } catch (e) {
     console.warn("Could not delete image:", e);
   }
