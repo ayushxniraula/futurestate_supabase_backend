@@ -1233,6 +1233,7 @@ body {
   color: var(--text-muted);
   line-height: 1.75;
   font-size: 13.5px;
+  white-space: pre-wrap;
 }
 
 .detail-grid {

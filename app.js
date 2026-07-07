@@ -1044,8 +1044,8 @@ function viewProperty(id) {
     ${p.google_maps_url ? `<a href="${p.google_maps_url}" target="_blank" class="btn-map">📍 View on Google Maps</a>` : ""}
     <div class="view-grid">
       <div class="view-main">
-        ${p.description ? `<div class="view-section"><h4>Overview</h4><p>${p.description}</p></div>` : ""}
-        ${p.features_description ? `<div class="view-section"><h4>Property Features</h4><p>${p.features_description}</p></div>` : ""}
+        ${p.description ? `<div class="view-section"><h4>Overview</h4><p>${escHtml(p.description)}</p></div>` : ""}
+        ${p.features_description ? `<div class="view-section"><h4>Property Features</h4><p>${escHtml(p.features_description)}</p></div>` : ""}
         <div class="view-section">
           <h4>Property Details</h4>
           <div class="detail-grid">
@@ -1768,7 +1768,7 @@ function openSellModal(id) {
           ? `
         <div style="margin-bottom:18px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Description</div>
-          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0">${escHtml(r.description)}</p>
+          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0;white-space:pre-wrap">${escHtml(r.description)}</p>
         </div>`
           : ""
       }
@@ -2197,7 +2197,7 @@ function openTenantModal(id) {
           ? `
         <div style="margin-bottom:18px">
           <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:8px">Description / Notes from Applicant</div>
-          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0">${escHtml(r.description)}</p>
+          <p style="font-size:13.5px;color:var(--text-muted);line-height:1.7;margin:0;white-space:pre-wrap">${escHtml(r.description)}</p>
         </div>`
           : ""
       }
