@@ -1607,7 +1607,7 @@ function renderSellTable(list) {
         day: "numeric",
         year: "numeric",
       });
-      const price = r.price ? "$" + Number(r.price).toLocaleString() : "—";
+      const price = r.price ? "NPR " + Number(r.price).toLocaleString() : "—";
       const isAgent = !!r.agent?.is_agent;
       const submitterBadge = isAgent
         ? `<span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;background:#1C94A422;color:#1C94A4;font-size:10px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;vertical-align:middle">Agent</span>`
@@ -1669,7 +1669,7 @@ function openSellModal(id) {
     rejected: "#e84545",
   };
   const color = statusColors[r.review_status] || "#888";
-  const price = r.price ? "$" + Number(r.price).toLocaleString() : "—";
+  const price = r.price ? "NPR " + Number(r.price).toLocaleString() : "—";
 
   const renderKV = (obj) => {
     if (!obj || Object.keys(obj).length === 0)
