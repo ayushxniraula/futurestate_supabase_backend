@@ -141,37 +141,7 @@ function showPage(name, skipReset = false) {
   if (name === "sell") loadSellRequests();
   if (name === "tenant") loadTenantRequests();
   if (name === "unverified") loadUnverifiedUsers();
-
-  // Mobile: close the off-canvas sidebar after navigating, and scroll
-  // the newly-shown page back to the top.
-  closeMobileSidebar();
-  const mainEl = document.querySelector(".main-content");
-  if (mainEl) mainEl.scrollTop = 0;
 }
-
-// ─── MOBILE SIDEBAR (off-canvas drawer) ────────────────────────
-function openMobileSidebar() {
-  document.getElementById("sidebar")?.classList.add("open");
-  document.getElementById("sidebarOverlay")?.classList.add("open");
-  document.body.classList.add("sidebar-locked");
-}
-function closeMobileSidebar() {
-  document.getElementById("sidebar")?.classList.remove("open");
-  document.getElementById("sidebarOverlay")?.classList.remove("open");
-  document.body.classList.remove("sidebar-locked");
-}
-function toggleMobileSidebar() {
-  const sidebar = document.getElementById("sidebar");
-  if (!sidebar) return;
-  sidebar.classList.contains("open")
-    ? closeMobileSidebar()
-    : openMobileSidebar();
-}
-// Keep things tidy if the viewport is resized past the mobile breakpoint
-// while the drawer happens to be open.
-window.addEventListener("resize", () => {
-  if (window.innerWidth > 900) closeMobileSidebar();
-});
 
 // ─── LISTINGS ─────────────────────────────────────────────────
 async function loadListings() {
