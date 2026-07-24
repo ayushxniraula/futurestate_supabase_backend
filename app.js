@@ -15,8 +15,202 @@ let deleteTargetId = null;
 let removedExistingImages = [];
 let removedExistingFloorPlans = [];
 
-const MAX_IMAGES = 5;
+const MAX_IMAGES = 10;
 const MAX_FLOOR_PLANS = 3;
+
+// ─── TEAM ───────────────────────────────────────────────────
+let allTeam = [];
+let teamPhotoFile = null;      // newly selected file (not yet uploaded)
+let teamExistingPhotoUrl = null; // photo url already on the record being edited
+let teamPhotoRemoved = false;    // user cleared the photo while editing
+
+async function loadTeam() {
+  const grid = document.getElementById("teamGrid");
+  const { data, error } = await supabase
+    .from("team_members")
+    .select("*")
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    grid.innerHTML = `<div class="loading-state"><p>Error loading team: ${error.message}</p></div>`;
+    return;
+  }
+  allTeam = data || [];
+  document.getElementById("teamCount").textContent = `${allTeam.length} member${allTeam.length === 1 ? "" : "s"}`;
+  renderTeamGrid();
+}
+
+function renderTeamGrid() {
+  const grid = document.getElementById("teamGrid");
+  if (!allTeam.length) {
+    grid.innerHTML = `<div class="loading-state"><p>No team members yet. Click "Add Team Member" to create one.</p></div>`;
+    return;
+  }
+  grid.innerHTML = allTeam.map((m) => `
+    <div class="property-card">
+      <div style="height:180px;overflow:hidden;background:var(--surface-2,#f2f2f2);display:flex;align-items:center;justify-content:center;">
+        ${m.image_url
+          ? `<img src="${m.image_url}" alt="${m.name}" style="width:100%;height:100%;object-fit:cover;" />`
+          : `<div class="agent-avatar-lg">${(m.name || "?").charAt(0).toUpperCase()}</div>`}
+      </div>
+      <div class="card-body" style="padding:14px;">
+        <div style="font-weight:600;">${m.name}</div>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:8px;">${m.role}${m.since_year ? ` · Since ${m.since_year}` : ""}</div>
+        <div class="card-actions" style="display:flex;gap:8px;">
+          <button class="card-btn" onclick="openTeamModal('${m.id}')" title="Edit">✎ Edit</button>
+          <button class="card-btn del" onclick="openTeamDeleteModal('${m.id}')" title="Delete">🗑</button>
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openTeamModal(id) {
+  document.getElementById("teamFormError").classList.add("hidden");
+  document.getElementById("teamPhotoInput").value = "";
+  teamPhotoFile = null;
+  teamPhotoRemoved = false;
+
+  const preview = document.getElementById("teamPhotoPreview");
+  const placeholder = document.getElementById("teamPhotoPlaceholder");
+
+  if (id) {
+    const m = allTeam.find((x) => x.id === id);
+    if (!m) return;
+    document.getElementById("teamModalTitle").textContent = "Edit Team Member";
+    document.getElementById("team_editingId").value = id;
+    document.getElementById("team_name").value = m.name || "";
+    document.getElementById("team_role").value = m.role || "";
+    document.getElementById("team_since").value = m.since_year || "";
+    document.getElementById("team_linkedin").value = m.linkedin_url || "";
+    document.getElementById("team_email").value = m.email || "";
+    document.getElementById("team_sort").value = m.sort_order ?? 0;
+    teamExistingPhotoUrl = m.image_url || null;
+    if (m.image_url) {
+      preview.src = m.image_url;
+      preview.style.display = "block";
+      placeholder.style.display = "none";
+    } else {
+      preview.style.display = "none";
+      placeholder.style.display = "block";
+    }
+  } else {
+    document.getElementById("teamModalTitle").textContent = "Add Team Member";
+    document.getElementById("team_editingId").value = "";
+    ["team_name", "team_role", "team_since", "team_linkedin", "team_email"].forEach(
+      (id) => (document.getElementById(id).value = ""),
+    );
+    document.getElementById("team_sort").value = 0;
+    teamExistingPhotoUrl = null;
+    preview.style.display = "none";
+    placeholder.style.display = "block";
+  }
+
+  document.getElementById("teamModal").classList.remove("hidden");
+}
+
+function closeTeamModal() {
+  document.getElementById("teamModal").classList.add("hidden");
+}
+
+function handleTeamPhotoSelect(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  teamPhotoFile = file;
+  teamPhotoRemoved = false;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const preview = document.getElementById("teamPhotoPreview");
+    preview.src = ev.target.result;
+    preview.style.display = "block";
+    document.getElementById("teamPhotoPlaceholder").style.display = "none";
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveTeamMember() {
+  const name = getVal("team_name");
+  const role = getVal("team_role");
+  if (!name) return showTeamFormError("Full name is required.");
+  if (!role) return showTeamFormError("Role / title is required.");
+
+  const btn = document.getElementById("teamSaveBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try {
+    const editId = getVal("team_editingId");
+    let imageUrl = teamExistingPhotoUrl;
+
+    if (teamPhotoFile) {
+      showToast("Uploading photo…", "info");
+      imageUrl = await uploadImage(teamPhotoFile, "team");
+      // clean up the old photo once the new one is safely uploaded
+      if (editId && teamExistingPhotoUrl) await deleteImageFromStorage(teamExistingPhotoUrl);
+    }
+
+    const payload = {
+      name,
+      role,
+      since_year: getVal("team_since") || null,
+      linkedin_url: getVal("team_linkedin") || null,
+      email: getVal("team_email") || null,
+      sort_order: parseInt(getVal("team_sort")) || 0,
+      image_url: imageUrl,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (editId) {
+      const { error } = await supabase.from("team_members").update(payload).eq("id", editId);
+      if (error) throw error;
+      showToast("Team member updated!", "success");
+    } else {
+      payload.created_at = new Date().toISOString();
+      const { error } = await supabase.from("team_members").insert([payload]);
+      if (error) throw error;
+      showToast("Team member added!", "success");
+    }
+
+    closeTeamModal();
+    await loadTeam();
+  } catch (err) {
+    showTeamFormError("Error saving: " + err.message);
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "💾 Save";
+  }
+}
+
+function showTeamFormError(msg) {
+  const el = document.getElementById("teamFormError");
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+let teamPendingDeleteId = null;
+function openTeamDeleteModal(id) {
+  teamPendingDeleteId = id;
+  document.getElementById("teamDeleteModal").classList.remove("hidden");
+}
+function closeTeamDeleteModal() {
+  teamPendingDeleteId = null;
+  document.getElementById("teamDeleteModal").classList.add("hidden");
+}
+async function confirmTeamDelete() {
+  if (!teamPendingDeleteId) return;
+  const m = allTeam.find((x) => x.id === teamPendingDeleteId);
+  try {
+    if (m?.image_url) await deleteImageFromStorage(m.image_url);
+    const { error } = await supabase.from("team_members").delete().eq("id", teamPendingDeleteId);
+    if (error) throw error;
+    showToast("Team member removed.", "success");
+    closeTeamDeleteModal();
+    await loadTeam();
+  } catch (err) {
+    showToast("Error deleting: " + err.message, "error");
+  }
+}
 
 // ─── AUTH ─────────────────────────────────────────────────────
 function doLogin() {
@@ -118,14 +312,15 @@ function showPage(name, skipReset = false) {
   const page = document.getElementById("page-" + name);
   if (page) page.classList.remove("hidden");
 
-  const navMap = {
-    listings: "[onclick=\"showPage('listings');return false;\"]",
-    add: "[onclick=\"showPage('add');return false;\"]",
-    contacts: "[onclick=\"showPage('contacts');return false;\"]",
-    sell: "[onclick=\"showPage('sell');return false;\"]",
-    tenant: "[onclick=\"showPage('tenant');return false;\"]",
-    unverified: "[onclick=\"showPage('unverified');return false;\"]",
-  };
+const navMap = {
+  listings: "[onclick=\"showPage('listings');return false;\"]",
+  add: "[onclick=\"showPage('add');return false;\"]",
+  contacts: "[onclick=\"showPage('contacts');return false;\"]",
+  sell: "[onclick=\"showPage('sell');return false;\"]",
+  tenant: "[onclick=\"showPage('tenant');return false;\"]",
+  unverified: "[onclick=\"showPage('unverified');return false;\"]",
+  team: "[onclick=\"showPage('team');return false;\"]",   // ← add this
+};
   if (navMap[name]) {
     const el = document.querySelector(navMap[name]);
     if (el) el.classList.add("active");
@@ -141,6 +336,7 @@ function showPage(name, skipReset = false) {
   if (name === "sell") loadSellRequests();
   if (name === "tenant") loadTenantRequests();
   if (name === "unverified") loadUnverifiedUsers();
+  if (name === "team") loadTeam();
 
   // Mobile: close the off-canvas sidebar after navigating, and scroll
   // the newly-shown page back to the top.
@@ -206,10 +402,10 @@ function updateStats() {
 
   let valStr;
   if (totalValue >= 1_000_000)
-    valStr = "$" + (totalValue / 1_000_000).toFixed(1) + "M";
+    valStr =  (totalValue / 1_000_000).toFixed(1) + "M";
   else if (totalValue >= 1_000)
-    valStr = "$" + (totalValue / 1_000).toFixed(0) + "K";
-  else valStr = "$" + totalValue;
+    valStr =  (totalValue / 1_000).toFixed(0) + "K";
+  else valStr =  totalValue;
   document.getElementById("statValue").textContent = valStr;
 }
 
@@ -1764,9 +1960,11 @@ function openSellModal(id) {
             text-align:center;text-decoration:none;font-size:13px;font-weight:700;border:1px solid var(--border)">
           📞 Call Seller
         </a>
-        <button onclick="approveSellRequest('${r.id}')"
+      <button onclick="approveSellRequest('${r.id}')"
           style="flex:1;padding:10px;border-radius:9px;background:#4caf50;color:#fff;
             border:none;font-size:13px;font-weight:700;cursor:pointer">
+          → Add to Listings
+        </button>
       </div>
 
       ${agentHtml}

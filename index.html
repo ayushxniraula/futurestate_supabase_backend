@@ -267,6 +267,9 @@
             <span class="nav-icon">👤</span> Users
             <span id="unverifiedBadge" class="nav-badge hidden">0</span>
           </a>
+          <a href="#" class="nav-item" onclick="showPage('team'); return false;">
+  <span class="nav-icon">🧑‍💼</span> Team
+</a>
         </nav>
         <div class="sidebar-footer">
           <div class="admin-badge">
@@ -1099,7 +1102,7 @@
               <div class="form-section">
                 <h3 class="section-title">
                   Property Images
-                  <span class="count-badge" id="imgCountBadge">0 / 5</span>
+                  <span class="count-badge" id="imgCountBadge">0 / 10</span>
                 </h3>
                 <div
                   class="upload-zone"
@@ -1659,6 +1662,87 @@
             </table>
           </div>
         </div>
+        <!-- TEAM PAGE -->
+<div id="page-team" class="page hidden">
+  <div class="page-header">
+    <div>
+      <h1>Team</h1>
+      <p id="teamCount">Loading…</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-secondary" onclick="loadTeam()" title="Refresh">↺ Refresh</button>
+      <button class="btn-primary" onclick="openTeamModal()">+ Add Team Member</button>
+    </div>
+  </div>
+
+  <div id="teamGrid" class="properties-grid">
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading team…</p>
+    </div>
+  </div>
+</div>
+
+<!-- ADD/EDIT TEAM MODAL -->
+<div id="teamModal" class="modal-overlay hidden" onclick="if (event.target === this) closeTeamModal();">
+  <div class="modal" style="width:480px;max-width:95vw;">
+    <div class="modal-close-btn" onclick="closeTeamModal()">✕</div>
+    <h3 id="teamModalTitle">Add Team Member</h3>
+    <input type="hidden" id="team_editingId" />
+
+    <div class="form-group">
+      <label>Photo</label>
+      <div id="teamPhotoZone" class="upload-zone" onclick="document.getElementById('teamPhotoInput').click()" style="cursor:pointer;text-align:center;padding:16px;">
+        <img id="teamPhotoPreview" src="" alt="" style="display:none;width:90px;height:90px;object-fit:cover;border-radius:50%;margin:0 auto 8px;" />
+        <div id="teamPhotoPlaceholder" style="font-size:13px;color:var(--text-muted);">Click to upload photo</div>
+      </div>
+      <input type="file" id="teamPhotoInput" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none" onchange="handleTeamPhotoSelect(event)" />
+    </div>
+
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="team_name" placeholder="e.g. Aarav Sharma" />
+    </div>
+    <div class="form-group">
+      <label>Role / Title *</label>
+      <input type="text" id="team_role" placeholder="e.g. Head of Sales" />
+    </div>
+    <div class="form-group">
+      <label>Since Year</label>
+      <input type="text" id="team_since" placeholder="e.g. 2014" />
+    </div>
+    <div class="form-group">
+      <label>LinkedIn URL</label>
+      <input type="text" id="team_linkedin" placeholder="https://linkedin.com/in/…" />
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="team_email" placeholder="name@futurestateagency.com" />
+    </div>
+    <div class="form-group">
+      <label>Display Order</label>
+      <input type="number" id="team_sort" placeholder="0" min="0" />
+    </div>
+
+    <div id="teamFormError" class="login-error hidden" style="margin-top:4px;"></div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeTeamModal()">Cancel</button>
+      <button class="btn-primary" id="teamSaveBtn" onclick="saveTeamMember()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="teamDeleteModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Remove Team Member?</h3>
+    <p>This will permanently delete this team member and their photo. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeTeamDeleteModal()">Cancel</button>
+      <button class="btn-danger" onclick="confirmTeamDelete()">Delete</button>
+    </div>
+  </div>
+</div>
       </main>
     </div>
 
